@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Bold Typography design tokens — single source of truth */
+@theme {
+  --color-background: #0a0a0a;
+  --color-foreground: #fafafa;
+  --color-muted: #1a1a1a;
+  --color-muted-foreground: #737373;
+  --color-accent: #7d2231; /* wine red sampled from brand swatch */
+  --color-accent-bright: #d96c7c; /* AA-legible accent for text on dark */
+  --color-accent-foreground: #fafafa;
+  --color-border: #262626;
+  --color-input: #1a1a1a;
+  --color-card: #0f0f0f;
+
+  --font-sans: "Inter Tight", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
+html,
+body {
+  background: #0a0a0a;
+  /* Les popovers react-aria se montent sur <body> : ils doivent hériter du thème */
+  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
+  color: #fafafa;
+}
