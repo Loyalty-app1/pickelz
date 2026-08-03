@@ -6,6 +6,8 @@ import {
   ADMIN_PASS,
   MAX_VISITS,
   IMG_STAMP,
+  IMG_LOGO,
+  TAGLINE,
   BASE,
   loadDB,
   saveDB,
@@ -18,14 +20,14 @@ import {
   isSameMonth,
 } from "./store.js";
 
-// Palette catégorielle validée (dataviz : luminance, chroma, CVD, contraste — OK sur #0F0F0F)
-const CAT_INSTAGRAM = "#D96C7C";
-const CAT_GOOGLE = "#4189BF";
-const BAR_COLOR = "#D96C7C";
-const GRID_COLOR = "#262626";
-
-const NOISE_URL =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+// Paire catégorielle validée sur la surface mauve profonde #53293A :
+// bande de luminance OKLab, plancher de chroma, séparation CVD (ΔE 80) et contraste ≥ 3:1.
+const CAT_INSTAGRAM = "#C87A2F";
+const CAT_GOOGLE = "#3E93C9";
+// Série unique : l'apricot de marque (contraste 6.4:1 sur la carte)
+const BAR_COLOR = "#FFE0C4";
+const GRID_COLOR = "rgba(255, 224, 196, 0.16)";
+const AXIS_TEXT = "#D1AC9F";
 
 const ADMIN_STYLES = `
   @property --glow-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
@@ -34,16 +36,16 @@ const ADMIN_STYLES = `
     background: conic-gradient(
       from var(--glow-angle),
       transparent 0deg,
-      #7d2231 70deg,
-      #d96c7c 120deg,
-      #7d2231 170deg,
+      #ffe0c4 70deg,
+      #ffffff 120deg,
+      #ffe0c4 170deg,
       transparent 240deg
     );
     animation: glowSpin 2.5s linear infinite;
   }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(20px); }
+    from { opacity: 0; transform: translateY(16px); }
     to { opacity: 1; transform: translateY(0); }
   }
   @keyframes shakeX {
@@ -53,17 +55,23 @@ const ADMIN_STYLES = `
     40%, 60% { transform: translateX(6px); }
   }
   .animate-fade-in { animation: fadeIn 0.2s ease-out both; }
-  .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.25, 0, 0, 1) both; }
+  .animate-fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
   .animate-shake-x { animation: shakeX 0.5s ease-in-out both; }
 `;
 
-/* Effet de bordure lumineuse au survol — même animation que les cases récompense */
+const INPUT =
+  "h-12 w-full rounded-2xl border-2 border-transparent bg-surface-deep px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground";
+const LABEL = "mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground";
+const BTN =
+  "h-12 rounded-full bg-accent px-6 font-display text-base font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97]";
+
+/* Bordure lumineuse au survol — même animation que les cases récompense */
 function GlowCard({ children, className = "" }) {
   return (
     <div className={`group relative ${className}`}>
-      <div className="glow-ring absolute -inset-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-      <div className="glow-ring absolute -inset-0.5 opacity-0 blur-md transition-opacity duration-200 group-hover:opacity-60" />
-      <div className="relative h-full border border-border bg-card p-5">{children}</div>
+      <div className="glow-ring absolute -inset-0.5 rounded-[1.6rem] opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+      <div className="glow-ring absolute -inset-0.5 rounded-[1.6rem] opacity-0 blur-md transition-opacity duration-200 group-hover:opacity-60" />
+      <div className="relative h-full rounded-3xl bg-surface p-5">{children}</div>
     </div>
   );
 }
@@ -71,13 +79,11 @@ function GlowCard({ children, className = "" }) {
 function StatTile({ label, value, hint }) {
   return (
     <GlowCard>
-      <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-2 text-4xl font-black leading-none tracking-[-0.04em] tabular-nums">
-        {value}
-      </p>
-      {hint && <p className="mt-2 text-xs text-muted-foreground">{hint}</p>}
+      <p className="mt-2 font-display text-4xl font-extrabold tabular-nums">{value}</p>
+      {hint && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{hint}</p>}
     </GlowCard>
   );
 }
@@ -85,10 +91,8 @@ function StatTile({ label, value, hint }) {
 function ChartCard({ title, subtitle, children }) {
   return (
     <GlowCard className="h-full">
-      <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-        {title}
-      </p>
-      {subtitle && <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>}
+      <p className="font-display text-lg font-bold">{title}</p>
+      {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
       <div className="mt-4">{children}</div>
     </GlowCard>
   );
@@ -102,7 +106,7 @@ function Donut({ slices, total, centerLabel }) {
   const GAP = 3;
   let acc = 0;
   return (
-    <div className="flex items-center gap-8">
+    <div className="flex flex-wrap items-center gap-8">
       <svg viewBox="0 0 180 180" className="h-44 w-44 shrink-0">
         {slices.map((s) => {
           const frac = total > 0 ? s.value / total : 0;
@@ -127,10 +131,10 @@ function Donut({ slices, total, centerLabel }) {
             />
           );
         })}
-        <text x="90" y="86" textAnchor="middle" fill="#FAFAFA" fontSize="30" fontWeight="900" fontFamily="Inter Tight">
+        <text x="90" y="87" textAnchor="middle" fill="#FFE0C4" fontSize="30" fontWeight="800" fontFamily="Baloo 2">
           {total}
         </text>
-        <text x="90" y="104" textAnchor="middle" fill="#737373" fontSize="10" fontFamily="JetBrains Mono" letterSpacing="1">
+        <text x="90" y="105" textAnchor="middle" fill={AXIS_TEXT} fontSize="9" fontFamily="Poppins" letterSpacing="1.5">
           {centerLabel}
         </text>
       </svg>
@@ -142,10 +146,10 @@ function Donut({ slices, total, centerLabel }) {
             onMouseEnter={() => setHover(s.label)}
             onMouseLeave={() => setHover(null)}
           >
-            <span className="h-3 w-3 shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
             <div>
               <p className="text-sm font-semibold text-foreground">{s.label}</p>
-              <p className="font-mono text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {s.value} · {total > 0 ? Math.round((s.value / total) * 100) : 0}%
               </p>
             </div>
@@ -165,7 +169,7 @@ function barPath(x, y, w, h, r) {
 function Bars({ data, height = 190 }) {
   const [hover, setHover] = useState(null);
   const W = 520;
-  const PAD_L = 36;
+  const PAD_L = 34;
   const PAD_B = 26;
   const PAD_T = 14;
   const plotW = W - PAD_L - 10;
@@ -182,7 +186,7 @@ function Bars({ data, height = 190 }) {
         return (
           <g key={t}>
             <line x1={PAD_L} x2={W - 10} y1={y} y2={y} stroke={GRID_COLOR} strokeWidth="1" />
-            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill="#737373" fontSize="10" fontFamily="JetBrains Mono">
+            <text x={PAD_L - 8} y={y + 3} textAnchor="end" fill={AXIS_TEXT} fontSize="10" fontFamily="Poppins">
               {t}
             </text>
           </g>
@@ -204,14 +208,14 @@ function Bars({ data, height = 190 }) {
               onMouseLeave={() => setHover(null)}
             />
             <path
-              d={barPath(x, y, barW, h, 4)}
+              d={barPath(x, y, barW, h, 5)}
               fill={BAR_COLOR}
               opacity={hover === null || hover === i ? 1 : 0.45}
               style={{ transition: "opacity 150ms" }}
               pointerEvents="none"
             />
             {hover === i && d.value > 0 && (
-              <text x={x + barW / 2} y={y - 6} textAnchor="middle" fill="#FAFAFA" fontSize="12" fontWeight="700" fontFamily="JetBrains Mono">
+              <text x={x + barW / 2} y={y - 6} textAnchor="middle" fill="#FFE0C4" fontSize="12" fontWeight="700" fontFamily="Poppins">
                 {d.value}
               </text>
             )}
@@ -219,9 +223,9 @@ function Bars({ data, height = 190 }) {
               x={PAD_L + i * slot + slot / 2}
               y={height - 8}
               textAnchor="middle"
-              fill={hover === i ? "#FAFAFA" : "#737373"}
+              fill={hover === i ? "#FFE0C4" : AXIS_TEXT}
               fontSize="10"
-              fontFamily="JetBrains Mono"
+              fontFamily="Poppins"
             >
               {d.label}
             </text>
@@ -252,14 +256,12 @@ function HBars({ data }) {
             ].join(" ")}
             title={d.label}
           >
-            <span className="mr-2 font-mono text-[10px] text-muted-foreground">
-              n°{String(d.visit).padStart(2, "0")}
-            </span>
+            <span className="mr-2 text-[10px] font-bold text-muted-foreground">n°{d.visit}</span>
             {d.label}
           </p>
           <div className="relative h-5 flex-1">
             <div
-              className="absolute inset-y-0 left-0 rounded-r-[4px] transition-all duration-500"
+              className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
               style={{
                 width: `${(d.value / max) * 100}%`,
                 backgroundColor: BAR_COLOR,
@@ -269,8 +271,8 @@ function HBars({ data }) {
           </div>
           <span
             className={[
-              "w-8 shrink-0 text-right font-mono text-sm tabular-nums transition-colors duration-150",
-              hover === i ? "font-bold text-accent-bright" : "text-muted-foreground",
+              "w-8 shrink-0 text-right text-sm font-bold tabular-nums transition-colors duration-150",
+              hover === i ? "text-foreground" : "text-muted-foreground",
             ].join(" ")}
           >
             {d.value}
@@ -304,14 +306,12 @@ function AdminGate({ children }) {
 
   if (unlocked) return children;
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+    <div className="flex min-h-screen items-center justify-center bg-background px-6 font-sans text-foreground">
       <style>{ADMIN_STYLES}</style>
       <form onSubmit={submit} className={["w-full max-w-xs", shake ? "animate-shake-x" : ""].join(" ")}>
-        <img src={IMG_STAMP} alt="" className="mx-auto h-16 w-16 [filter:invert(1)] mix-blend-screen opacity-90" />
-        <h1 className="mt-6 text-center text-2xl font-black uppercase tracking-[-0.04em]">
-          Espace équipe
-        </h1>
-        <p className="mt-2 text-center font-mono text-xs uppercase tracking-[0.15em] text-muted-foreground">
+        <img src={IMG_STAMP} alt="" className="mx-auto h-20 w-20" />
+        <h1 className="mt-6 text-center font-display text-3xl font-extrabold">Espace équipe</h1>
+        <p className="mt-1 text-center text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
           Mot de passe requis
         </p>
         <input
@@ -320,17 +320,14 @@ function AdminGate({ children }) {
           onChange={(e) => setPass(e.target.value)}
           placeholder="••••"
           autoFocus
-          className="mt-6 h-14 w-full border border-border bg-input px-4 text-center font-mono text-xl tracking-[0.4em] text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/40 focus:border-accent-bright"
+          className="mt-6 h-14 w-full rounded-2xl border-2 border-transparent bg-surface px-4 text-center font-display text-2xl tracking-[0.4em] text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/40 focus:border-foreground"
         />
-        <button
-          type="submit"
-          className="mt-4 h-14 w-full bg-accent text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
-        >
+        <button type="submit" className={`${BTN} mt-4 w-full`}>
           Entrer
         </button>
         <a
           href={BASE}
-          className="mt-6 block text-center font-mono text-xs uppercase tracking-[0.15em] text-muted-foreground transition-colors duration-150 hover:text-foreground"
+          className="mt-6 block text-center text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground transition-colors duration-150 hover:text-foreground"
         >
           Retour à l'app
         </a>
@@ -349,45 +346,29 @@ function AdminShell({ active, children }) {
   ];
   return (
     <AdminGate>
-      <div className="min-h-screen bg-background font-sans text-foreground antialiased [letter-spacing:-0.01em]">
+      <div className="min-h-screen bg-background font-sans text-foreground antialiased">
         <style>{ADMIN_STYLES}</style>
-        <div
-          aria-hidden="true"
-          className="pointer-events-none fixed inset-0 z-[100] opacity-[0.015]"
-          style={{ backgroundImage: NOISE_URL }}
-        />
         <div className="mx-auto w-full max-w-5xl px-8 py-10">
           <header className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-5">
-              <img src={IMG_STAMP} alt="" className="h-14 w-14 [filter:invert(1)] mix-blend-screen opacity-90" />
-              <div>
-                <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                  The First — Coffee & Resto
-                </p>
-                <h1 className="text-3xl font-black uppercase leading-tight tracking-[-0.04em]">
-                  Espace équipe
-                </h1>
-              </div>
+            <div className="flex items-center gap-4">
+              <img src={IMG_LOGO} alt={`Pickel'z — ${TAGLINE}`} className="w-32" />
+              <span className="rounded-full bg-surface px-4 py-1.5 font-display text-sm font-bold text-muted-foreground">
+                Espace équipe
+              </span>
             </div>
-            <nav className="flex flex-wrap items-center gap-5">
+            <nav className="flex flex-wrap items-center gap-2">
               {nav.map((n) => (
                 <a
                   key={n.key}
                   href={n.href}
                   className={[
-                    "group relative py-2 font-mono text-xs font-medium uppercase tracking-[0.15em] transition-colors duration-150",
+                    "rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-colors duration-150",
                     active === n.key
-                      ? "text-accent-bright"
-                      : "text-muted-foreground hover:text-foreground",
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-surface hover:text-foreground",
                   ].join(" ")}
                 >
                   {n.label}
-                  <span
-                    className={[
-                      "absolute bottom-0 left-0 h-0.5 w-full origin-left bg-accent-bright transition-transform duration-150",
-                      active === n.key ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100",
-                    ].join(" ")}
-                  />
                 </a>
               ))}
             </nav>
@@ -444,7 +425,6 @@ export function AdminDashboard() {
     const returningRate =
       withVisits.length > 0 ? Math.round((returning.length / withVisits.length) * 100) : null;
 
-    // Intervalle moyen entre deux visites consécutives (tous clients confondus)
     let gapSum = 0;
     let gapCount = 0;
     for (const u of users) {
@@ -532,7 +512,11 @@ export function AdminDashboard() {
   }
 
   function handleClear() {
-    if (window.confirm("Tout vider ? Clients, historiques, récompenses et titres personnalisés seront supprimés.")) {
+    if (
+      window.confirm(
+        "Tout vider ? Clients, historiques, récompenses et titres personnalisés seront supprimés."
+      )
+    ) {
       setDb(clearDB());
     }
   }
@@ -542,7 +526,7 @@ export function AdminDashboard() {
       {/* Filtres */}
       <section className="animate-fade-in-up mt-8 flex flex-wrap items-center gap-3">
         <DateRange value={range} onChange={setRange} />
-        <div className="flex h-11 items-center border border-border bg-input">
+        <div className="flex h-11 items-center rounded-full bg-surface p-1">
           {[
             { v: "all", label: "Tout" },
             { v: "instagram", label: "Instagram" },
@@ -553,7 +537,7 @@ export function AdminDashboard() {
               type="button"
               onClick={() => setProofFilter(o.v)}
               className={[
-                "h-full px-4 font-mono text-[10px] font-medium uppercase tracking-[0.15em] transition-colors duration-150",
+                "h-full rounded-full px-4 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-150",
                 proofFilter === o.v
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -567,14 +551,14 @@ export function AdminDashboard() {
           <button
             type="button"
             onClick={handleSeed}
-            className="h-11 border border-dashed border-muted-foreground/50 px-4 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground"
+            className="h-11 rounded-full border-2 border-dashed border-muted-foreground/40 px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground"
           >
             Temp — Seed démo
           </button>
           <button
             type="button"
             onClick={handleClear}
-            className="h-11 border border-dashed border-accent-bright/60 px-4 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-accent-bright transition-colors duration-150 hover:border-accent-bright hover:bg-accent/10"
+            className="h-11 rounded-full border-2 border-dashed border-muted-foreground/40 px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground"
           >
             Temp — Tout vider
           </button>
@@ -582,15 +566,27 @@ export function AdminDashboard() {
       </section>
 
       {/* Indicateurs clés */}
-      <section className="animate-fade-in-up mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatTile label="Clients" value={stats.totalUsers} hint={`${stats.participants} actif${stats.participants > 1 ? "s" : ""} ce mois · ${stats.promoOptIns} opt-in promos`} />
-        <StatTile label="Visites (période)" value={stats.filteredVisits} hint={`${stats.visitsThisMonth} ce mois-ci, tous types`} />
+      <section className="animate-fade-in-up mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          label="Clients"
+          value={stats.totalUsers}
+          hint={`${stats.participants} actif${stats.participants > 1 ? "s" : ""} ce mois · ${stats.promoOptIns} opt-in promos`}
+        />
+        <StatTile
+          label="Visites (période)"
+          value={stats.filteredVisits}
+          hint={`${stats.visitsThisMonth} ce mois-ci, tous types`}
+        />
         <StatTile
           label="Remises débloquées"
           value={stats.discountsGiven}
           hint="Sur le parcours du mois en cours"
         />
-        <StatTile label="Gourmandises offertes" value={stats.treatsGiven} hint="Sodas, crêpes et frappuccinos débloqués" />
+        <StatTile
+          label="Gourmandises offertes"
+          value={stats.treatsGiven}
+          hint="Sodas, crêpes et milkshakes débloqués"
+        />
       </section>
 
       {/* Fidélité & rétention */}
@@ -610,11 +606,7 @@ export function AdminDashboard() {
           value={stats.avgReturnDays === null ? "—" : `${stats.avgReturnDays} j`}
           hint="Délai moyen entre deux visites"
         />
-        <StatTile
-          label="Tirage du mois"
-          value={stats.participants}
-          hint="Participants à la roue en cours"
-        />
+        <StatTile label="Tirage du mois" value={stats.participants} hint="Participants à la roue en cours" />
       </section>
 
       {/* Graphiques */}
@@ -645,7 +637,10 @@ export function AdminDashboard() {
           </ChartCard>
         </div>
         <div className="lg:col-span-7">
-          <ChartCard title="Récompenses débloquées" subtitle="Nombre de clients ayant atteint chaque palier ce mois-ci">
+          <ChartCard
+            title="Récompenses débloquées"
+            subtitle="Nombre de clients ayant atteint chaque palier ce mois-ci"
+          >
             <HBars data={stats.rewardBars} />
           </ChartCard>
         </div>
@@ -654,33 +649,33 @@ export function AdminDashboard() {
       {/* Clients */}
       <section className="mt-10">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-            Clients — cliquez pour le détail
-          </h2>
+          <h2 className="font-display text-2xl font-extrabold">Clients</h2>
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher nom, téléphone, Instagram…"
-            className="h-11 w-80 border border-border bg-input px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+            placeholder="Rechercher nom, surnom, téléphone, Instagram…"
+            className="h-11 w-80 rounded-full border-2 border-transparent bg-surface px-5 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
           />
         </div>
         {visibleUsers.length === 0 ? (
-          <div className="border border-border px-8 py-12 text-center text-sm text-muted-foreground">
-            {users.length === 0 ? "Aucun client pour l'instant." : "Aucun résultat pour cette recherche."}
+          <div className="rounded-3xl bg-surface px-8 py-12 text-center text-sm text-muted-foreground">
+            {users.length === 0
+              ? "Aucun client pour l'instant."
+              : "Aucun résultat pour cette recherche."}
           </div>
         ) : (
-          <div className="overflow-x-auto border border-border">
+          <div className="overflow-x-auto rounded-3xl bg-surface">
             <table className="w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-border font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Nom</th>
-                  <th className="px-4 py-3 font-medium">Surnom</th>
-                  <th className="px-4 py-3 font-medium">Titre</th>
-                  <th className="px-4 py-3 text-right font-medium">Mois</th>
-                  <th className="px-4 py-3 text-right font-medium">Total</th>
-                  <th className="px-4 py-3 font-medium">Instagram</th>
-                  <th className="px-4 py-3 text-right font-medium">Dernier passage</th>
+                <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  <th className="px-5 py-4 font-bold">Nom</th>
+                  <th className="px-5 py-4 font-bold">Surnom</th>
+                  <th className="px-5 py-4 font-bold">Titre</th>
+                  <th className="px-5 py-4 text-right font-bold">Mois</th>
+                  <th className="px-5 py-4 text-right font-bold">Total</th>
+                  <th className="px-5 py-4 font-bold">Instagram</th>
+                  <th className="px-5 py-4 text-right font-bold">Dernier passage</th>
                 </tr>
               </thead>
               <tbody>
@@ -690,21 +685,23 @@ export function AdminDashboard() {
                     <tr
                       key={u.id}
                       onClick={() => setSelectedUser(u)}
-                      className="cursor-pointer border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-muted"
+                      className="cursor-pointer border-b border-border/30 transition-colors duration-150 last:border-b-0 hover:bg-raised"
                     >
-                      <td className="px-4 py-3 font-semibold">{u.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{u.nickname || "—"}</td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-5 py-3.5 font-semibold">{u.name}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">{u.nickname || "—"}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground">
                         {getTitle(db.titles, monthVisits(u))}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums">{monthVisits(u)}</td>
-                      <td className="px-4 py-3 text-right font-mono tabular-nums text-muted-foreground">
+                      <td className="px-5 py-3.5 text-right font-bold tabular-nums">
+                        {monthVisits(u)}
+                      </td>
+                      <td className="px-5 py-3.5 text-right tabular-nums text-muted-foreground">
                         {u.history.length}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-5 py-3.5 text-muted-foreground">
                         {u.instagram ? `@${u.instagram}` : "—"}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-xs text-muted-foreground">
+                      <td className="px-5 py-3.5 text-right text-xs text-muted-foreground">
                         {last ? formatDateFR(last.date) : "—"}
                       </td>
                     </tr>
@@ -718,16 +715,18 @@ export function AdminDashboard() {
 
       {/* Détail client */}
       {selectedUser && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
-          <div className="animate-fade-in absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedUser(null)} />
-          <div className="animate-fade-in-up relative max-h-[85vh] w-full max-w-lg overflow-y-auto border border-border bg-card p-6">
-            <div className="absolute left-6 top-0 h-1 w-16 bg-accent" />
-            <div className="flex items-start justify-between pt-2">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-5">
+          <div
+            className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSelectedUser(null)}
+          />
+          <div className="animate-fade-in-up relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-[2rem] bg-background p-6 ring-2 ring-border">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-2xl font-black uppercase leading-tight tracking-[-0.04em]">
+                <h2 className="font-display text-3xl font-extrabold leading-tight">
                   {selectedUser.name}
                 </h2>
-                <p className="mt-1 font-mono text-xs font-medium tracking-[0.15em] text-accent-bright">
+                <p className="mt-1 text-sm font-semibold text-muted-foreground">
                   {selectedUser.id}
                   {selectedUser.nickname ? ` — « ${selectedUser.nickname} »` : ""}
                 </p>
@@ -736,49 +735,32 @@ export function AdminDashboard() {
                 type="button"
                 onClick={() => setSelectedUser(null)}
                 aria-label="Fermer"
-                className="p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-surface hover:text-foreground"
               >
-                <X size={18} strokeWidth={1.5} />
+                <X size={18} strokeWidth={2.5} />
               </button>
             </div>
 
-            <dl className="mt-6 grid grid-cols-2 gap-x-6 gap-y-4">
-              <div>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Téléphone</dt>
-                <dd className="mt-1 text-sm font-semibold">{selectedUser.phone}</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Instagram</dt>
-                <dd className="mt-1 text-sm font-semibold">
-                  {selectedUser.instagram ? `@${selectedUser.instagram}` : "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Titre</dt>
-                <dd className="mt-1 text-sm font-semibold">
-                  {getTitle(db.titles, monthVisits(selectedUser))}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Parcours du mois</dt>
-                <dd className="mt-1 text-sm font-semibold tabular-nums">
-                  {monthVisits(selectedUser)} / {MAX_VISITS}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Visites totales</dt>
-                <dd className="mt-1 text-sm font-semibold tabular-nums">{selectedUser.history.length}</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Offres promos</dt>
-                <dd className="mt-1 text-sm font-semibold">
-                  {selectedUser.promoOptIn ? "Acceptées" : "Refusées"}
-                </dd>
-              </div>
+            <dl className="mt-6 grid grid-cols-2 gap-3">
+              {[
+                ["Téléphone", selectedUser.phone],
+                ["Instagram", selectedUser.instagram ? `@${selectedUser.instagram}` : "—"],
+                ["Titre", getTitle(db.titles, monthVisits(selectedUser))],
+                ["Parcours du mois", `${monthVisits(selectedUser)} / ${MAX_VISITS}`],
+                ["Visites totales", String(selectedUser.history.length)],
+                ["Offres promos", selectedUser.promoOptIn ? "Acceptées" : "Refusées"],
+              ].map(([k, v]) => (
+                <div key={k} className="rounded-2xl bg-surface p-4">
+                  <dt className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                    {k}
+                  </dt>
+                  <dd className="mt-1 text-sm font-semibold">{v}</dd>
+                </div>
+              ))}
             </dl>
 
             <div className="mt-6">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
                 Récompenses débloquées ce mois-ci
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -788,7 +770,10 @@ export function AdminDashboard() {
                   rewards
                     .filter((r) => monthVisits(selectedUser) >= r.visit)
                     .map((r) => (
-                      <span key={r.id} className="border border-accent-bright px-2.5 py-1 text-xs font-semibold text-accent-bright">
+                      <span
+                        key={r.id}
+                        className="rounded-full bg-accent px-3 py-1.5 text-xs font-bold text-accent-foreground"
+                      >
                         {r.label}
                       </span>
                     ))
@@ -797,25 +782,29 @@ export function AdminDashboard() {
             </div>
 
             <div className="mt-6">
-              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                Historique complet — {selectedUser.history.length} visite{selectedUser.history.length > 1 ? "s" : ""}
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
+                Historique complet — {selectedUser.history.length} visite
+                {selectedUser.history.length > 1 ? "s" : ""}
               </p>
               {selectedUser.history.length === 0 ? (
                 <p className="mt-2 text-sm text-muted-foreground">Aucune visite enregistrée.</p>
               ) : (
-                <div className="mt-2">
+                <div className="mt-2 overflow-hidden rounded-2xl bg-surface">
                   {[...selectedUser.history].reverse().map((h, idx) => (
-                    <div key={h.id} className="flex items-baseline justify-between gap-4 border-t border-border py-2.5">
+                    <div
+                      key={h.id}
+                      className="flex items-baseline justify-between gap-4 px-4 py-3 [&+&]:border-t [&+&]:border-border/30"
+                    >
                       <p className="text-sm">
-                        <span className="mr-3 font-mono text-xs text-muted-foreground">
+                        <span className="mr-3 text-xs font-bold text-muted-foreground">
                           n°{selectedUser.history.length - idx}
                         </span>
                         {h.type === "instagram" ? "Story Instagram" : "Avis Google"}
-                        <span className="ml-2 font-mono text-[10px] text-muted-foreground">
-                          serveur {h.serverCode}
+                        <span className="ml-2 text-[10px] text-muted-foreground">
+                          équipe {h.serverCode}
                         </span>
                       </p>
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      <span className="shrink-0 text-xs text-muted-foreground">
                         {formatDateFR(h.date)}
                       </span>
                     </div>
@@ -845,7 +834,7 @@ const EMPTY_REWARD = {
 
 export function AdminRewardsPage() {
   const [db, setDb] = useState(loadDB);
-  const [editing, setEditing] = useState(null); // objet récompense en cours d'édition
+  const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -914,39 +903,32 @@ export function AdminRewardsPage() {
     }
   }
 
-  const inputClass =
-    "h-12 w-full border border-border bg-input px-3 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright";
-
   return (
     <AdminShell active="rewards">
       <section className="animate-fade-in-up mt-8">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-black uppercase tracking-[-0.04em]">Récompenses du parcours</h2>
+            <h2 className="font-display text-3xl font-extrabold">Récompenses du parcours</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Modifiez les paliers, les gains et leurs périodes de validité — l'app cliente se met à
               jour instantanément.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openNew}
-            className="flex h-12 items-center gap-2 bg-accent px-5 text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
-          >
-            <Plus size={16} strokeWidth={1.5} />
+          <button type="button" onClick={openNew} className={`${BTN} flex items-center gap-2`}>
+            <Plus size={18} strokeWidth={2.5} />
             Ajouter
           </button>
         </div>
 
-        <div className="mt-6 overflow-x-auto border border-border">
+        <div className="mt-6 overflow-x-auto rounded-3xl bg-surface">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-border font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Palier</th>
-                <th className="px-4 py-3 font-medium">Récompense</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Plafond</th>
-                <th className="px-4 py-3 font-medium">Validité</th>
+              <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                <th className="px-5 py-4 font-bold">Palier</th>
+                <th className="px-5 py-4 font-bold">Récompense</th>
+                <th className="px-5 py-4 font-bold">Type</th>
+                <th className="px-5 py-4 font-bold">Plafond</th>
+                <th className="px-5 py-4 font-bold">Validité</th>
               </tr>
             </thead>
             <tbody>
@@ -954,22 +936,24 @@ export function AdminRewardsPage() {
                 <tr
                   key={r.id}
                   onClick={() => openEdit(r)}
-                  className="cursor-pointer border-b border-border transition-colors duration-150 last:border-b-0 hover:bg-muted"
+                  className="cursor-pointer border-b border-border/30 transition-colors duration-150 last:border-b-0 hover:bg-raised"
                 >
-                  <td className="px-4 py-3 font-mono text-lg font-bold tabular-nums text-accent-bright">
-                    {String(r.visit).padStart(2, "0")}
+                  <td className="px-5 py-4">
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent font-display text-base font-extrabold tabular-nums text-accent-foreground">
+                      {r.visit}
+                    </span>
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="font-semibold">{r.label}</p>
+                  <td className="px-5 py-4">
+                    <p className="font-display text-base font-bold">{r.label}</p>
                     <p className="text-xs text-muted-foreground">{r.detail}</p>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td className="px-5 py-4 text-muted-foreground">
                     {r.kind === "discount" ? "Remise" : "Gourmandise"}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td className="px-5 py-4 text-muted-foreground">
                     {r.kind === "discount" ? (r.capped ? "10 DT" : "Sans plafond") : "—"}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                  <td className="px-5 py-4 text-xs text-muted-foreground">
                     {r.activeFrom || r.activeTo
                       ? `${r.activeFrom || "…"} → ${r.activeTo || "…"}`
                       : "Permanente"}
@@ -982,50 +966,48 @@ export function AdminRewardsPage() {
       </section>
 
       {editing && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
-          <div className="animate-fade-in absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditing(null)} />
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-5">
+          <div
+            className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setEditing(null)}
+          />
           <form
             onSubmit={handleSave}
-            className="animate-fade-in-up relative max-h-[90vh] w-full max-w-md overflow-y-auto border border-border bg-card p-6"
+            className="animate-fade-in-up relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-background p-6 ring-2 ring-border"
           >
-            <div className="absolute left-6 top-0 h-1 w-16 bg-accent" />
-            <div className="mb-5 flex items-start justify-between pt-2">
-              <h2 className="text-xl font-black uppercase tracking-[-0.04em]">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <h2 className="font-display text-2xl font-extrabold">
                 {db.rewards.some((r) => r.id === editing.id) ? "Modifier" : "Nouvelle récompense"}
               </h2>
               <button
                 type="button"
                 onClick={() => setEditing(null)}
                 aria-label="Fermer"
-                className="p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-surface hover:text-foreground"
               >
-                <X size={18} strokeWidth={1.5} />
+                <X size={18} strokeWidth={2.5} />
               </button>
             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Palier (visite n°)
-                  </label>
+                  <label className={LABEL}>Palier (visite n°)</label>
                   <input
                     type="number"
                     min="1"
                     max={MAX_VISITS}
                     value={editing.visit}
                     onChange={(e) => set("visit", e.target.value)}
-                    className={inputClass}
+                    className={INPUT}
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Type
-                  </label>
+                  <label className={LABEL}>Type</label>
                   <select
                     value={editing.kind}
                     onChange={(e) => set("kind", e.target.value)}
-                    className={inputClass}
+                    className={INPUT}
                   >
                     <option value="discount">Remise</option>
                     <option value="treat">Gourmandise</option>
@@ -1033,73 +1015,62 @@ export function AdminRewardsPage() {
                 </div>
               </div>
               <div>
-                <label className="mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                  Nom
-                </label>
+                <label className={LABEL}>Nom</label>
                 <input
                   type="text"
                   placeholder="20% de réduction"
                   value={editing.label}
                   onChange={(e) => set("label", e.target.value)}
-                  className={inputClass}
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label className="mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                  Détail
-                </label>
+                <label className={LABEL}>Détail</label>
                 <input
                   type="text"
                   placeholder="Plafonnée à 10 DT"
                   value={editing.detail}
                   onChange={(e) => set("detail", e.target.value)}
-                  className={inputClass}
+                  className={INPUT}
                 />
               </div>
               {editing.kind === "discount" && (
-                <label className="flex cursor-pointer items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-3 rounded-2xl bg-surface p-4">
                   <input
                     type="checkbox"
                     checked={editing.capped}
                     onChange={(e) => set("capped", e.target.checked)}
-                    className="h-4 w-4 cursor-pointer appearance-none border border-border bg-input transition-colors duration-150 checked:border-accent-bright checked:bg-accent"
+                    className="h-5 w-5 cursor-pointer appearance-none rounded-md bg-surface-deep ring-2 ring-border transition-colors duration-150 checked:bg-accent checked:ring-accent"
                   />
                   <span className="text-sm text-muted-foreground">Plafonnée à 10 DT</span>
                 </label>
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    Active du
-                  </label>
+                  <label className={LABEL}>Active du</label>
                   <input
                     type="date"
                     value={editing.activeFrom}
                     onChange={(e) => set("activeFrom", e.target.value)}
-                    className={`${inputClass} [color-scheme:dark]`}
+                    className={`${INPUT} [color-scheme:dark]`}
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                    au
-                  </label>
+                  <label className={LABEL}>au</label>
                   <input
                     type="date"
                     value={editing.activeTo}
                     onChange={(e) => set("activeTo", e.target.value)}
-                    className={`${inputClass} [color-scheme:dark]`}
+                    className={`${INPUT} [color-scheme:dark]`}
                   />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Laissez les dates vides pour une récompense permanente.
               </p>
-              {formError && <p className="animate-fade-in text-sm text-accent-bright">{formError}</p>}
-              <div className="flex items-center gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="h-12 flex-1 bg-accent text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
-                >
+              {formError && <p className="animate-fade-in text-sm font-medium">{formError}</p>}
+              <div className="flex items-center gap-3 pt-1">
+                <button type="submit" className={`${BTN} flex-1`}>
                   Enregistrer
                 </button>
                 {db.rewards.some((r) => r.id === editing.id) && (
@@ -1107,9 +1078,9 @@ export function AdminRewardsPage() {
                     type="button"
                     onClick={handleDelete}
                     aria-label="Supprimer"
-                    className="flex h-12 w-12 items-center justify-center border border-accent-bright/60 text-accent-bright transition-colors duration-150 hover:bg-accent/10 active:translate-y-px"
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-2 border-foreground/60 text-foreground transition-colors duration-150 hover:bg-foreground hover:text-accent-foreground active:scale-95"
                   >
-                    <Trash2 size={16} strokeWidth={1.5} />
+                    <Trash2 size={17} strokeWidth={2} />
                   </button>
                 )}
               </div>
@@ -1171,7 +1142,9 @@ export function AdminTitlesPage() {
         return;
       }
       if (i > 0 && rows[i].min <= rows[i - 1].min) {
-        setError(`La cascade doit monter : le palier n°${i + 1} doit dépasser ${rows[i - 1].min} visites.`);
+        setError(
+          `La cascade doit monter : le palier n°${i + 1} doit dépasser ${rows[i - 1].min} visites.`
+        );
         return;
       }
     }
@@ -1184,7 +1157,7 @@ export function AdminTitlesPage() {
   return (
     <AdminShell active="titles">
       <section className="animate-fade-in-up mt-8 max-w-2xl">
-        <h2 className="text-xl font-black uppercase tracking-[-0.04em]">Titres des clients</h2>
+        <h2 className="font-display text-3xl font-extrabold">Titres des clients</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Les titres se débloquent en cascade au fil des visites du mois : chaque seuil doit être
           plus haut que le précédent.
@@ -1193,7 +1166,10 @@ export function AdminTitlesPage() {
         <div className="mt-6 space-y-2">
           {draft.map((t, i) => (
             <div key={i} className="flex items-center gap-3" style={{ paddingLeft: `${i * 20}px` }}>
-              <div className="h-px w-4 shrink-0 bg-accent" style={{ opacity: i === 0 ? 0 : 1 }} />
+              <div
+                className="h-1 w-4 shrink-0 rounded-full bg-accent"
+                style={{ opacity: i === 0 ? 0 : 1 }}
+              />
               <input
                 type="number"
                 min="0"
@@ -1201,9 +1177,9 @@ export function AdminTitlesPage() {
                 value={t.min}
                 disabled={i === 0}
                 onChange={(e) => setRow(i, "min", e.target.value)}
-                className="h-12 w-24 border border-border bg-input px-3 text-center font-mono text-sm tabular-nums text-foreground outline-none transition-colors duration-150 focus:border-accent-bright disabled:opacity-50"
+                className="h-12 w-24 rounded-2xl border-2 border-transparent bg-surface px-3 text-center text-sm font-bold tabular-nums text-foreground outline-none transition-colors duration-150 focus:border-foreground disabled:opacity-50"
               />
-              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
                 visites →
               </span>
               <input
@@ -1211,44 +1187,43 @@ export function AdminTitlesPage() {
                 value={t.label}
                 placeholder="Nom du titre"
                 onChange={(e) => setRow(i, "label", e.target.value)}
-                className="h-12 min-w-0 flex-1 border border-border bg-input px-4 text-sm font-semibold text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+                className="h-12 min-w-0 flex-1 rounded-2xl border-2 border-transparent bg-surface px-4 font-display text-base font-bold text-foreground outline-none transition-colors duration-150 placeholder:font-sans placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-foreground"
               />
               <button
                 type="button"
                 onClick={() => removeRow(i)}
                 disabled={i === 0 && draft.length === 1}
                 aria-label="Supprimer ce palier"
-                className="flex h-12 w-12 shrink-0 items-center justify-center border border-border text-muted-foreground transition-colors duration-150 hover:border-accent-bright hover:text-accent-bright disabled:opacity-30"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface text-muted-foreground transition-colors duration-150 hover:bg-raised hover:text-foreground disabled:opacity-30"
               >
-                <Trash2 size={15} strokeWidth={1.5} />
+                <Trash2 size={16} strokeWidth={2} />
               </button>
             </div>
           ))}
         </div>
 
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={addRow}
-            className="flex h-12 items-center gap-2 border border-foreground px-5 text-sm font-semibold uppercase tracking-[0.1em] text-foreground transition-colors duration-150 hover:bg-foreground hover:text-background active:translate-y-px"
+            className="flex h-12 items-center gap-2 rounded-full border-2 border-foreground px-5 font-display text-base font-extrabold text-foreground transition-colors duration-150 hover:bg-foreground hover:text-accent-foreground active:scale-[0.97]"
           >
-            <Plus size={15} strokeWidth={1.5} />
+            <Plus size={17} strokeWidth={2.5} />
             Ajouter un palier
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className={[
-              "h-12 px-8 text-sm font-semibold uppercase tracking-[0.1em] transition-colors duration-150 active:translate-y-px",
+            className={
               saved
-                ? "border border-accent-bright text-accent-bright"
-                : "bg-accent text-accent-foreground hover:bg-[#93293a]",
-            ].join(" ")}
+                ? "h-12 rounded-full bg-surface px-8 font-display text-base font-extrabold text-foreground"
+                : `${BTN} px-8`
+            }
           >
             {saved ? "Enregistré !" : "Enregistrer la cascade"}
           </button>
         </div>
-        {error && <p className="animate-fade-in mt-3 text-sm text-accent-bright">{error}</p>}
+        {error && <p className="animate-fade-in mt-3 text-sm font-medium">{error}</p>}
       </section>
     </AdminShell>
   );

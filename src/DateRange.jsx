@@ -18,11 +18,11 @@ import {
 import { today, getLocalTimeZone, startOfMonth, endOfMonth } from "@internationalized/date";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 
-// Adaptation du DateRangePicker react-aria (pattern Untitled UI) à notre système :
-// angles vifs, mono, fond sombre, accent vin.
+// DateRangePicker react-aria adapté au système Pickel'z :
+// formes arrondies, mauve profond, accent apricot.
 
 const segmentClass =
-  "px-0.5 font-mono text-xs tabular-nums text-foreground outline-none data-[placeholder]:text-muted-foreground/60 focus:bg-accent focus:text-accent-foreground";
+  "px-0.5 text-xs font-semibold tabular-nums text-foreground outline-none rounded data-[placeholder]:text-muted-foreground/60 focus:bg-accent focus:text-accent-foreground";
 
 function dateInput(slot) {
   return (
@@ -56,39 +56,39 @@ export default function DateRange({ value, onChange }) {
       shouldCloseOnSelect={false}
       className="relative"
     >
-      <AriaGroup className="flex h-11 items-center gap-2 border border-border bg-input px-3 transition-colors duration-150 focus-within:border-accent-bright hover:border-foreground/40">
+      <AriaGroup className="flex h-11 items-center gap-2 rounded-full bg-surface px-4 ring-2 ring-transparent transition-all duration-150 focus-within:ring-foreground hover:bg-raised">
         {dateInput("start")}
-        <span className="font-mono text-xs text-muted-foreground">–</span>
+        <span className="text-xs text-muted-foreground">–</span>
         {dateInput("end")}
-        <AriaButton className="ml-1 p-1 text-muted-foreground outline-none transition-colors duration-150 hover:text-accent-bright focus-visible:text-accent-bright">
-          <CalendarIcon size={16} strokeWidth={1.5} />
+        <AriaButton className="ml-1 rounded-full p-1 text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground focus-visible:text-foreground">
+          <CalendarIcon size={16} strokeWidth={2} />
         </AriaButton>
       </AriaGroup>
       <AriaPopover
         placement="bottom start"
-        className="border border-border bg-card p-4 shadow-[0_8px_40px_rgba(0,0,0,0.7)]"
+        className="rounded-3xl bg-surface p-4 ring-2 ring-border shadow-[0_12px_50px_rgba(0,0,0,0.45)]"
       >
         <AriaDialog className="outline-none">
           <RangeCalendar className="text-foreground">
             <header className="mb-3 flex items-center justify-between">
               <AriaButton
                 slot="previous"
-                className="p-1.5 text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground"
+                className="rounded-full p-2 text-muted-foreground outline-none transition-colors duration-150 hover:bg-raised hover:text-foreground"
               >
-                <ChevronLeft size={16} strokeWidth={1.5} />
+                <ChevronLeft size={16} strokeWidth={2.5} />
               </AriaButton>
-              <Heading className="font-mono text-xs font-medium uppercase tracking-[0.15em] text-foreground" />
+              <Heading className="font-display text-base font-bold capitalize text-foreground" />
               <AriaButton
                 slot="next"
-                className="p-1.5 text-muted-foreground outline-none transition-colors duration-150 hover:text-foreground"
+                className="rounded-full p-2 text-muted-foreground outline-none transition-colors duration-150 hover:bg-raised hover:text-foreground"
               >
-                <ChevronRight size={16} strokeWidth={1.5} />
+                <ChevronRight size={16} strokeWidth={2.5} />
               </AriaButton>
             </header>
-            <CalendarGrid className="border-separate border-spacing-0.5">
+            <CalendarGrid className="border-separate border-spacing-1">
               <CalendarGridHeader>
                 {(day) => (
-                  <CalendarHeaderCell className="pb-1 font-mono text-[9px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+                  <CalendarHeaderCell className="pb-1 text-[9px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                     {day}
                   </CalendarHeaderCell>
                 )}
@@ -105,14 +105,14 @@ export default function DateRange({ value, onChange }) {
                       isFocusVisible,
                     }) =>
                       [
-                        "flex h-8 w-8 cursor-pointer items-center justify-center font-mono text-xs tabular-nums outline-none transition-colors duration-100",
+                        "flex h-8 w-8 cursor-pointer items-center justify-center rounded-full text-xs font-semibold tabular-nums outline-none transition-colors duration-100",
                         isOutsideMonth ? "invisible" : "",
                         isSelectionStart || isSelectionEnd
-                          ? "bg-accent font-bold text-accent-foreground"
+                          ? "bg-accent text-accent-foreground"
                           : isSelected
-                            ? "bg-accent/30 text-foreground"
-                            : "text-foreground hover:bg-muted",
-                        isFocusVisible ? "ring-1 ring-accent-bright" : "",
+                            ? "bg-raised text-foreground"
+                            : "text-foreground hover:bg-raised",
+                        isFocusVisible ? "ring-2 ring-foreground" : "",
                       ].join(" ")
                     }
                   />
@@ -120,13 +120,13 @@ export default function DateRange({ value, onChange }) {
               </CalendarGridBody>
             </CalendarGrid>
           </RangeCalendar>
-          <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border pt-3">
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-border/60 pt-3">
             {presets.map((p) => (
               <button
                 key={p.label}
                 type="button"
                 onClick={() => onChange(p.range)}
-                className="border border-border px-2.5 py-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-muted-foreground transition-colors duration-150 hover:border-accent-bright hover:text-accent-bright"
+                className="rounded-full bg-surface-deep px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground"
               >
                 {p.label}
               </button>

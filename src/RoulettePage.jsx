@@ -1,12 +1,12 @@
 import React, { useState, useRef, useMemo } from "react";
 import { Wheel } from "react-custom-roulette";
 import { X } from "lucide-react";
-import { loadDB, isSameMonth, IMG_LOGO, BASE } from "./store.js";
+import { loadDB, isSameMonth, IMG_LOGO, TAGLINE, BASE } from "./store.js";
 
-const CONFETTI_COLORS = ["#7D2231", "#D96C7C", "#FAFAFA", "#737373"];
-
-const NOISE_URL =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
+const MAUVE = "#673447";
+const APRICOT = "#FFE0C4";
+const DEEP = "#48222F";
+const CONFETTI_COLORS = [APRICOT, "#FFFFFF", "#C87A2F", "#D1AC9F"];
 
 function shortName(u) {
   if (u.nickname) return u.nickname;
@@ -32,14 +32,16 @@ export default function RoulettePage() {
   const wheelData = participants.map((u, i) => ({
     option: shortName(u),
     style: {
-      // Alternance vin/noir ; si le nombre est impair, la dernière part passe en gris
+      // Alternance apricot / mauve profond ; nombre impair : dernière part en mauve clair
       backgroundColor:
         i === participants.length - 1 && participants.length % 2 === 1
-          ? "#1A1A1A"
+          ? MAUVE
           : i % 2 === 0
-            ? "#7D2231"
-            : "#0F0F0F",
-      textColor: "#FAFAFA",
+            ? APRICOT
+            : DEEP,
+      textColor: i % 2 === 0 && !(i === participants.length - 1 && participants.length % 2 === 1)
+        ? MAUVE
+        : APRICOT,
     },
   }));
 
@@ -156,7 +158,7 @@ export default function RoulettePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground antialiased [letter-spacing:-0.01em]">
+    <div className="min-h-screen bg-background font-sans text-foreground antialiased">
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes popIn {
@@ -170,46 +172,31 @@ export default function RoulettePage() {
           100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
         }
         @keyframes winnerGlow {
-          0%, 100% { text-shadow: 0 0 30px rgba(217, 108, 124, 0.4); }
-          50% { text-shadow: 0 0 80px rgba(217, 108, 124, 0.9); }
+          0%, 100% { text-shadow: 0 0 30px rgba(255, 224, 196, 0.35); }
+          50% { text-shadow: 0 0 80px rgba(255, 224, 196, 0.85); }
         }
         .animate-fade-in { animation: fadeIn 0.3s ease-out both; }
-        .animate-pop-in { animation: popIn 0.5s cubic-bezier(0.25, 0, 0, 1) both; }
+        .animate-pop-in { animation: popIn 0.5s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
         .animate-winner-glow { animation: winnerGlow 2s ease-in-out infinite; }
       `}</style>
 
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-[100] opacity-[0.015]"
-        style={{ backgroundImage: NOISE_URL }}
-      />
-
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center px-8 py-10">
-        <header className="flex w-full items-center justify-between">
-          <img
-            src={IMG_LOGO}
-            alt="The First — Coffee & Resto"
-            className="w-36 [filter:invert(1)] mix-blend-screen"
-          />
+        <header className="flex w-full items-center justify-between gap-4">
+          <img src={IMG_LOGO} alt={`Pickel'z — ${TAGLINE}`} className="w-36" />
           <a
             href={BASE}
-            className="group relative py-2 font-mono text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground transition-colors duration-150 hover:text-foreground"
+            className="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors duration-150 hover:text-foreground"
           >
             Retour à l'app
-            <span className="absolute bottom-0 left-0 h-px w-full origin-left scale-x-0 bg-foreground transition-transform duration-150 group-hover:scale-x-100" />
           </a>
         </header>
 
         <div className="mt-8 text-center">
-          <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Tirage au sort — {monthLabel}
           </p>
-          <h1 className="mt-3 text-6xl font-black uppercase leading-none tracking-[-0.04em]">
-            La roue du
-            <span className="ml-4 text-accent-bright">First.</span>
-          </h1>
-          <div className="mx-auto mt-5 h-1 w-16 bg-accent" />
-          <p className="mt-4 text-base text-muted-foreground">
+          <h1 className="mt-3 font-display text-6xl font-extrabold">La roue Pickel'z</h1>
+          <p className="mt-3 text-base text-muted-foreground">
             {participants.length > 0
               ? `${participants.length} client${participants.length > 1 ? "s" : ""} dans la roue — tous ceux qui sont passés nous voir ce mois-ci.`
               : "Aucun participant ce mois-ci pour l'instant."}
@@ -217,23 +204,22 @@ export default function RoulettePage() {
         </div>
 
         {participants.length > 0 ? (
-          <div className="mt-10 flex flex-col items-center">
+          <div className="mt-8 flex flex-col items-center">
             <div className="[&>div]:!m-0">
               <Wheel
                 mustStartSpinning={mustSpin}
                 prizeNumber={prizeNumber}
                 data={wheelData}
                 onStopSpinning={handleStop}
-                outerBorderColor="#262626"
-                outerBorderWidth={8}
-                innerBorderColor="#262626"
-                innerBorderWidth={4}
+                outerBorderColor={APRICOT}
+                outerBorderWidth={10}
+                innerBorderColor={APRICOT}
+                innerBorderWidth={6}
                 innerRadius={12}
-                radiusLineColor="#0A0A0A"
-                radiusLineWidth={2}
-                textColors={["#FAFAFA"]}
-                fontFamily="Inter Tight"
-                fontSize={16}
+                radiusLineColor={MAUVE}
+                radiusLineWidth={3}
+                fontFamily="Baloo 2"
+                fontSize={17}
                 fontWeight={700}
                 textDistance={62}
                 spinDuration={1.1}
@@ -243,15 +229,15 @@ export default function RoulettePage() {
               type="button"
               onClick={handleSpin}
               disabled={mustSpin}
-              className="mt-10 h-16 w-72 bg-accent text-base font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px disabled:pointer-events-none disabled:opacity-50"
+              className="mt-9 h-16 w-72 rounded-full bg-accent font-display text-xl font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50"
             >
-              {mustSpin ? "La roue tourne…" : "Lancer la roue"}
+              {mustSpin ? "Ça tourne…" : "Lancer la roue"}
             </button>
           </div>
         ) : (
-          <div className="mt-16 border border-border px-12 py-16 text-center">
-            <p className="text-lg font-bold uppercase tracking-[0.05em]">La roue attend ses joueurs</p>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+          <div className="mt-16 rounded-[2rem] bg-surface px-12 py-16 text-center">
+            <p className="font-display text-2xl font-extrabold">La roue attend ses joueurs</p>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
               Dès qu'un client tamponne une visite ce mois-ci, son nom rejoint automatiquement le
               tirage.
             </p>
@@ -262,7 +248,7 @@ export default function RoulettePage() {
       {/* Annonce du gagnant */}
       {showWinner && winner && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center">
-          <div className="animate-fade-in absolute inset-0 bg-black/90 backdrop-blur-md" />
+          <div className="animate-fade-in absolute inset-0 bg-background/95 backdrop-blur-md" />
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             {confettiPieces.map((p) => (
               <span
@@ -273,49 +259,51 @@ export default function RoulettePage() {
                   width: p.size,
                   height: p.round ? p.size : p.size * 1.6,
                   backgroundColor: p.color,
-                  borderRadius: p.round ? "50%" : "2px",
+                  borderRadius: p.round ? "50%" : "3px",
                   transform: `rotate(${p.rotate}deg)`,
                   animation: `confettiFall ${p.duration}s ${p.delay}s ease-in infinite`,
                 }}
               />
             ))}
           </div>
-          <div className="animate-pop-in relative mx-8 w-full max-w-3xl border-2 border-accent bg-card px-10 py-14 text-center">
+          <div className="animate-pop-in relative mx-8 w-full max-w-3xl rounded-[2.5rem] bg-surface px-10 py-14 text-center ring-4 ring-accent">
             <button
               type="button"
               onClick={() => setShowWinner(false)}
               aria-label="Fermer"
-              className="absolute right-5 top-5 p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+              className="absolute right-6 top-6 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-raised hover:text-foreground"
             >
-              <X size={22} strokeWidth={1.5} />
+              <X size={22} strokeWidth={2.5} />
             </button>
-            <p className="font-mono text-sm font-semibold uppercase tracking-[0.25em] text-accent-bright">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground">
               Et le gagnant du mois est…
             </p>
-            <p className="animate-winner-glow mt-6 text-7xl font-black uppercase leading-none tracking-[-0.04em]">
+            <p className="animate-winner-glow mt-5 font-display text-7xl font-extrabold leading-none">
               {winner.name}
             </p>
             {winner.nickname && (
-              <p className="mt-4 text-2xl font-bold text-accent-bright">« {winner.nickname} »</p>
+              <p className="mt-4 font-display text-3xl font-bold text-muted-foreground">
+                « {winner.nickname} »
+              </p>
             )}
-            <p className="mt-8 text-base text-muted-foreground">
+            <p className="mt-7 text-base text-muted-foreground">
               Bravo ! Passez au comptoir pour récupérer votre cadeau.
             </p>
-            <div className="mt-10 flex items-center justify-center gap-4">
+            <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
               <button
                 type="button"
                 onClick={() => {
                   setShowWinner(false);
                   handleSpin();
                 }}
-                className="h-14 w-56 border border-foreground text-sm font-semibold uppercase tracking-[0.1em] text-foreground transition-colors duration-150 hover:bg-foreground hover:text-background active:translate-y-px"
+                className="h-14 w-56 rounded-full border-2 border-foreground font-display text-lg font-extrabold text-foreground transition-all duration-150 hover:bg-foreground hover:text-accent-foreground active:scale-[0.97]"
               >
                 Relancer la roue
               </button>
               <button
                 type="button"
                 onClick={() => setShowWinner(false)}
-                className="h-14 w-56 bg-accent text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
+                className="h-14 w-56 rounded-full bg-accent font-display text-lg font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97]"
               >
                 Terminer
               </button>

@@ -5,6 +5,8 @@ import {
   MAX_VISITS,
   IMG_STAMP,
   IMG_LOGO,
+  TAGLINE,
+  INSTA_HANDLE,
   loadDB,
   saveDB,
   seedDemoDB,
@@ -23,9 +25,6 @@ const GRID_COLS = 5;
 const GRID_ROWS = MAX_VISITS / GRID_COLS;
 // Demi-largeur de cellule : 5 colonnes, 4 gouttières de 0.5rem
 const CELL_INSET = "calc((100% - 2rem) / 10)";
-
-const NOISE_URL =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
 export default function App() {
   const [db, setDb] = useState(loadDB);
@@ -348,24 +347,22 @@ export default function App() {
       <div key={visitNumber} id={`cell-${visitNumber}`} className="relative z-10">
         {isReward && (
           <>
-            <div className="glow-ring absolute -inset-0.5" />
-            <div className="glow-ring absolute -inset-0.5 opacity-70 blur-md" />
+            <div className="glow-ring absolute -inset-1 rounded-2xl" />
+            <div className="glow-ring absolute -inset-1 rounded-2xl opacity-70 blur-md" />
           </>
         )}
         <div
           className={[
-            "relative flex aspect-square items-center justify-center border bg-card transition-colors duration-200",
-            isCurrent ? "border-2 border-accent-bright" : "border-border",
+            "relative flex aspect-square items-center justify-center rounded-2xl transition-colors duration-200",
+            isCurrent
+              ? "bg-surface-deep ring-2 ring-foreground"
+              : "bg-surface-deep ring-1 ring-border/60",
           ].join(" ")}
         >
           <span
             className={[
-              "absolute top-0.5 left-1 font-mono text-[9px] font-medium",
-              completed
-                ? "text-accent-bright"
-                : isCurrent
-                  ? "text-foreground"
-                  : "text-muted-foreground",
+              "absolute top-1 left-1.5 text-[9px] font-semibold",
+              completed ? "text-accent-foreground/0" : "text-muted-foreground",
             ].join(" ")}
           >
             {String(visitNumber).padStart(2, "0")}
@@ -375,7 +372,7 @@ export default function App() {
               src={IMG_STAMP}
               alt={`Tampon visite ${visitNumber}`}
               className={[
-                "h-full w-full object-contain p-0.5 [filter:invert(1)] mix-blend-screen opacity-90",
+                "h-[86%] w-[86%] object-contain drop-shadow-sm",
                 visitNumber === justStamped ? "animate-stamp-in" : "",
               ].join(" ")}
               style={{
@@ -405,16 +402,19 @@ export default function App() {
     const enterDone = visits >= start + 1;
     const sideStyle = (side) =>
       side === "right"
-        ? { right: `calc(${CELL_INSET} - 1px)` }
-        : { left: `calc(${CELL_INSET} - 1px)` };
+        ? { right: `calc(${CELL_INSET} - 2px)` }
+        : { left: `calc(${CELL_INSET} - 2px)` };
     return (
       <React.Fragment key={r}>
         {r > 0 && (
           <div className="relative h-6">
-            <div className="absolute bottom-0 top-0 w-0.5 bg-border" style={sideStyle(enterSide)} />
+            <div
+              className="absolute bottom-0 top-0 w-1 rounded-full bg-surface-deep"
+              style={sideStyle(enterSide)}
+            />
             {enterDone && (
               <div
-                className="absolute bottom-0 top-0 w-0.5 bg-accent-bright"
+                className="absolute bottom-0 top-0 w-1 rounded-full bg-foreground"
                 style={sideStyle(enterSide)}
               />
             )}
@@ -422,11 +422,11 @@ export default function App() {
         )}
         <div className="relative">
           <div
-            className="absolute top-1/2 h-0.5 -translate-y-1/2 bg-border"
+            className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-surface-deep"
             style={{ left: CELL_INSET, right: CELL_INSET }}
           />
           <div
-            className="absolute top-1/2 h-0.5 -translate-y-1/2 bg-accent-bright transition-all duration-500"
+            className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-foreground transition-all duration-500"
             style={{
               [reversed ? "right" : "left"]: CELL_INSET,
               width: `calc((100% - 2 * ${CELL_INSET}) * ${frac})`,
@@ -435,12 +435,12 @@ export default function App() {
           {r > 0 && (
             <>
               <div
-                className="absolute top-0 bottom-1/2 w-0.5 bg-border"
+                className="absolute top-0 bottom-1/2 w-1 rounded-full bg-surface-deep"
                 style={sideStyle(enterSide)}
               />
               {enterDone && (
                 <div
-                  className="absolute top-0 bottom-1/2 w-0.5 bg-accent-bright"
+                  className="absolute top-0 bottom-1/2 w-1 rounded-full bg-foreground"
                   style={sideStyle(enterSide)}
                 />
               )}
@@ -449,12 +449,12 @@ export default function App() {
           {r < GRID_ROWS - 1 && (
             <>
               <div
-                className="absolute bottom-0 top-1/2 w-0.5 bg-border"
+                className="absolute bottom-0 top-1/2 w-1 rounded-full bg-surface-deep"
                 style={sideStyle(exitSide)}
               />
               {exitDone && (
                 <div
-                  className="absolute bottom-0 top-1/2 w-0.5 bg-accent-bright"
+                  className="absolute bottom-0 top-1/2 w-1 rounded-full bg-foreground"
                   style={sideStyle(exitSide)}
                 />
               )}
@@ -466,22 +466,27 @@ export default function App() {
     );
   }
 
+  const inputClass =
+    "h-14 w-full rounded-2xl border-2 border-transparent bg-surface px-4 text-base text-foreground outline-none transition-colors duration-200 placeholder:text-muted-foreground/60 focus:border-foreground";
+  const labelClass = "mb-2 block text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground";
+  const btnPrimary =
+    "h-14 w-full rounded-full bg-accent font-display text-lg font-extrabold tracking-wide text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97]";
+  const btnGhost =
+    "h-14 w-full rounded-full border-2 border-foreground/70 font-display text-lg font-extrabold tracking-wide text-foreground transition-all duration-150 hover:bg-foreground hover:text-accent-foreground active:scale-[0.97]";
+
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground antialiased [letter-spacing:-0.01em]">
+    <div className="min-h-screen bg-background font-sans text-foreground antialiased">
       <style>{`
         @property --glow-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
         @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(20px); }
+          from { opacity: 0; transform: translateY(16px); }
           to { opacity: 1; transform: translateY(0); }
         }
         @keyframes slideUp {
           from { transform: translateY(100%); }
           to { transform: translateY(0); }
         }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes shakeX {
           10%, 90% { transform: translateX(-2px); }
           20%, 80% { transform: translateX(4px); }
@@ -490,13 +495,13 @@ export default function App() {
         }
         @keyframes revealPulse {
           0% { transform: scale(1); }
-          50% { transform: scale(1.05); }
+          50% { transform: scale(1.06); }
           100% { transform: scale(1); }
         }
         @keyframes stampIn {
           0% { transform: scale(2.6) rotate(var(--rot)); opacity: 0; }
-          55% { transform: scale(0.92) rotate(var(--rot)); opacity: 1; }
-          75% { transform: scale(1.04) rotate(var(--rot)); }
+          55% { transform: scale(0.9) rotate(var(--rot)); opacity: 1; }
+          75% { transform: scale(1.06) rotate(var(--rot)); }
           100% { transform: scale(1) rotate(var(--rot)); opacity: 1; }
         }
         @keyframes glowSpin { to { --glow-angle: 360deg; } }
@@ -504,9 +509,9 @@ export default function App() {
           background: conic-gradient(
             from var(--glow-angle),
             transparent 0deg,
-            #7d2231 70deg,
-            #d96c7c 120deg,
-            #7d2231 170deg,
+            #ffe0c4 70deg,
+            #ffffff 120deg,
+            #ffe0c4 170deg,
             transparent 240deg
           );
           animation: glowSpin 2.5s linear infinite;
@@ -522,7 +527,7 @@ export default function App() {
           bottom: 0;
           left: 0;
           width: 45%;
-          background: linear-gradient(90deg, transparent, rgba(250, 250, 250, 0.10), transparent);
+          background: linear-gradient(90deg, transparent, rgba(255, 224, 196, 0.16), transparent);
           animation: glareSweep 2.8s ease-in-out infinite;
           pointer-events: none;
         }
@@ -532,49 +537,34 @@ export default function App() {
           90% { transform: translateY(-1px); }
         }
         .chevron-nudge { animation: chevronNudge 2.8s ease-in-out infinite; }
-        .animate-fade-in-up { animation: fadeInUp 0.5s cubic-bezier(0.25, 0, 0, 1) both; }
-        .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.25, 0, 0, 1) both; }
+        .animate-fade-in-up { animation: fadeInUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .animate-slide-up { animation: slideUp 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
         .animate-fade-in { animation: fadeIn 0.2s ease-out both; }
         .animate-shake-x { animation: shakeX 0.5s ease-in-out both; }
-        .animate-reveal-pulse { animation: revealPulse 0.5s cubic-bezier(0.25, 0, 0, 1) both; }
-        .animate-stamp-in { animation: stampIn 0.5s cubic-bezier(0.25, 0, 0, 1) both; }
+        .animate-reveal-pulse { animation: revealPulse 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .animate-stamp-in { animation: stampIn 0.5s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
       `}</style>
-
-      {/* Grain de bruit subtil sur toute la page */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed inset-0 z-[100] opacity-[0.015]"
-        style={{ backgroundImage: NOISE_URL }}
-      />
 
       {currentUser === null ? (
         /* ============================== ACCUEIL ============================== */
         <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between px-6 py-12">
           <div className="flex flex-1 flex-col justify-center">
-            <p className="text-center font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-              Est. 2017
-            </p>
-
             <img
               src={IMG_LOGO}
-              alt="The First — Coffee & Resto"
-              className="mx-auto mt-6 w-64 [filter:invert(1)] mix-blend-screen"
+              alt={`Pickel'z — ${TAGLINE}`}
+              className="mx-auto w-64 max-w-full"
             />
 
-            <h1 className="mt-10 text-5xl font-black uppercase leading-none tracking-[-0.04em]">
-              Chaque café
-              <span className="block text-accent-bright">compte.</span>
+            <h1 className="mt-12 text-center font-display text-5xl font-extrabold">
+              Chaque burger
+              <span className="block">compte.</span>
             </h1>
-            <div className="mt-5 h-1 w-16 bg-accent" />
 
             <form onSubmit={handleLogin} className="mt-12">
-              <label
-                htmlFor="login-code"
-                className="mb-3 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-              >
+              <label htmlFor="login-code" className={labelClass}>
                 Déjà membre ?
               </label>
-              <div className="flex items-stretch gap-4">
+              <div className="flex items-stretch gap-3">
                 <input
                   id="login-code"
                   type="text"
@@ -587,75 +577,63 @@ export default function App() {
                     setLoginCode(e.target.value.toUpperCase());
                     setLoginError("");
                   }}
-                  className="h-14 min-w-0 flex-1 border border-border bg-input px-4 font-mono text-base font-semibold tracking-[0.15em] text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+                  className={`${inputClass} flex-1 font-semibold tracking-[0.12em]`}
                 />
                 <button
                   type="submit"
-                  className="group relative flex shrink-0 items-center gap-2 py-3 text-sm font-semibold uppercase tracking-[0.1em] text-accent-bright transition-all duration-150 active:translate-y-px"
+                  className="flex h-14 shrink-0 items-center gap-2 rounded-full bg-accent px-6 font-display text-lg font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97]"
                 >
-                  Entrer
-                  <ArrowRight size={16} strokeWidth={1.5} />
-                  <span className="absolute bottom-1 left-0 h-0.5 w-full origin-left bg-accent-bright transition-transform duration-150 group-hover:scale-x-110" />
+                  Go
+                  <ArrowRight size={18} strokeWidth={2.5} />
                 </button>
               </div>
               {loginError && (
-                <p className="animate-fade-in mt-3 text-sm text-accent-bright">{loginError}</p>
+                <p className="animate-fade-in mt-3 text-sm font-medium">{loginError}</p>
               )}
             </form>
 
-            <div className="my-8 flex items-center gap-4">
-              <div className="h-px flex-1 bg-border" />
-              <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            <div className="my-7 flex items-center gap-4">
+              <div className="h-0.5 flex-1 rounded-full bg-border/60" />
+              <span className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 ou
               </span>
-              <div className="h-px flex-1 bg-border" />
+              <div className="h-0.5 flex-1 rounded-full bg-border/60" />
             </div>
 
-            <button
-              type="button"
-              onClick={() => setSignupOpen(true)}
-              className="h-14 w-full border border-foreground text-sm font-semibold uppercase tracking-[0.1em] text-foreground transition-colors duration-150 hover:bg-foreground hover:text-background active:translate-y-px"
-            >
-              Créer ma carte de fidélité
+            <button type="button" onClick={() => setSignupOpen(true)} className={btnGhost}>
+              Créer ma carte
             </button>
 
             <button
               type="button"
               onClick={handleDemoLogin}
-              className="mt-4 h-11 w-full border border-dashed border-muted-foreground/50 font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground active:translate-y-px"
+              className="mt-4 h-11 w-full rounded-full border-2 border-dashed border-muted-foreground/40 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground active:scale-[0.98]"
             >
               Temp — Connexion démo
             </button>
           </div>
 
           <p className="mt-12 text-center text-xs leading-relaxed text-muted-foreground">
-            Pas de mot de passe, pas de spam. Juste du bon café.
+            Pas de mot de passe, pas de spam. Juste de bons burgers.
           </p>
         </div>
       ) : (
         /* ============================== PARCOURS ============================== */
         <div className="mx-auto w-full max-w-md pb-44">
-          <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-xl">
-            <div className="flex h-[72px] items-center justify-between gap-3 px-6">
+          <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl">
+            <div className="flex h-[76px] items-center justify-between gap-3 px-6">
               <button
                 type="button"
                 onClick={openProfile}
-                className="group flex min-w-0 items-center gap-3 text-left transition-opacity duration-150 hover:opacity-80 active:translate-y-px"
+                className="group flex min-w-0 items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98]"
                 title="Modifier mes infos"
               >
-                <img
-                  src={IMG_STAMP}
-                  alt=""
-                  className="h-10 w-10 shrink-0 [filter:invert(1)] mix-blend-screen opacity-90"
-                />
+                <img src={IMG_STAMP} alt="" className="h-11 w-11 shrink-0" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-bold leading-tight">
+                  <p className="truncate font-display text-lg font-bold leading-tight">
                     {currentUser.nickname || currentUser.name}
-                    <span className="ml-2 font-mono text-[9px] font-medium uppercase tracking-[0.15em] text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-                      Modifier
-                    </span>
                   </p>
-                  <p className="font-mono text-xs font-medium tracking-[0.15em] text-accent-bright">
+                  <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground">
                     {currentUser.id}
                   </p>
                 </div>
@@ -663,56 +641,54 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="group relative shrink-0 py-2 font-mono text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground transition-colors duration-150 hover:text-foreground active:translate-y-px"
+                className="shrink-0 rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-colors duration-150 hover:text-foreground active:scale-95"
               >
                 Sortir
-                <span className="absolute bottom-0 left-0 h-px w-full origin-left scale-x-0 bg-foreground transition-transform duration-150 group-hover:scale-x-100" />
               </button>
             </div>
           </header>
 
           <main className="px-6">
-            {/* Compteur éditorial + titre */}
-            <section className="animate-fade-in-up mt-10">
-              <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+            {/* Compteur + titre */}
+            <section className="animate-fade-in-up mt-4 rounded-[2rem] bg-surface p-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 Votre parcours du mois
               </p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-7xl font-black leading-none tracking-[-0.04em] tabular-nums">
-                  {visits}
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="font-display text-7xl font-extrabold tabular-nums">{visits}</span>
+                <span className="font-display text-2xl font-bold text-muted-foreground">
+                  / {MAX_VISITS}
                 </span>
-                <span className="text-2xl font-bold text-muted-foreground">/ {MAX_VISITS}</span>
               </div>
-              <div className="mt-4 flex items-baseline gap-3">
-                <span className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                  Votre titre
-                </span>
-                <span className="text-lg font-black uppercase tracking-[-0.02em] text-accent-bright">
+              <div className="mt-3 inline-flex rounded-full bg-accent px-4 py-1.5">
+                <span className="font-display text-base font-extrabold text-accent-foreground">
                   {getTitle(titles, visits)}
                 </span>
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                 {journeyComplete
                   ? "Parcours du mois terminé — montrez cet écran au comptoir !"
                   : nextReward
                     ? `Encore ${nextReward.visit - visits} visite${nextReward.visit - visits > 1 ? "s" : ""} avant : ${nextReward.label.toLowerCase()}.`
                     : "Continuez, ça sent bon."}
               </p>
-              <p className="mt-2 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground/60">
+              <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                 Le parcours repart à zéro le 1er de chaque mois
               </p>
             </section>
 
             {/* Bandeau récompense (après fermeture du volet) */}
             {rewardBanner && (
-              <div className="animate-fade-in-up mt-6 border-2 border-accent p-4">
+              <div className="animate-fade-in-up mt-4 rounded-[2rem] bg-accent p-5 text-accent-foreground">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-accent-bright">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-70">
                       Récompense débloquée
                     </p>
-                    <p className="mt-1.5 text-sm font-bold leading-snug">{rewardBanner.label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1.5 font-display text-2xl font-extrabold leading-tight">
+                      {rewardBanner.label}
+                    </p>
+                    <p className="mt-1 text-xs font-medium opacity-80">
                       {rewardBanner.detail} — montrez cet écran au comptoir.
                     </p>
                   </div>
@@ -720,86 +696,90 @@ export default function App() {
                     type="button"
                     onClick={() => setRewardBanner(null)}
                     aria-label="Fermer"
-                    className="shrink-0 p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                    className="shrink-0 rounded-full p-1.5 transition-colors duration-150 hover:bg-accent-foreground/10"
                   >
-                    <X size={18} strokeWidth={1.5} />
+                    <X size={18} strokeWidth={2.5} />
                   </button>
                 </div>
               </div>
             )}
 
             {/* Grille des 50 tampons, repliable */}
-            <section className="mt-10">
+            <section className="mt-4">
               <button
                 type="button"
                 onClick={() => setGridOpen((o) => !o)}
                 aria-expanded={gridOpen}
-                className="glare sticky top-[72px] z-20 flex w-full items-center justify-between gap-4 overflow-hidden border border-border bg-background px-4 py-4 transition-colors duration-150 hover:border-accent-bright active:translate-y-px"
+                className="glare sticky top-[76px] z-20 flex w-full items-center justify-between gap-4 overflow-hidden rounded-[1.75rem] bg-surface px-5 py-4 transition-colors duration-150 hover:bg-raised active:scale-[0.99]"
               >
                 <span className="min-w-0 text-left">
-                  <span className="block font-mono text-xs font-medium uppercase tracking-[0.2em] text-foreground">
-                    La tournée des tampons — {visits}/{MAX_VISITS}
+                  <span className="block font-display text-lg font-bold leading-tight">
+                    La carte des tampons
                   </span>
-                  <span className="mt-0.5 block font-mono text-[9px] font-medium uppercase tracking-[0.15em] text-muted-foreground">
-                    {gridOpen ? "Appuyez pour replier" : "Appuyez pour dérouler"}
+                  <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {gridOpen ? "Appuyez pour replier" : "Appuyez pour dérouler"} · {visits}/
+                    {MAX_VISITS}
                   </span>
                 </span>
-                <ChevronDown
-                  size={18}
-                  strokeWidth={1.5}
-                  className={[
-                    "shrink-0 text-accent-bright transition-transform duration-200",
-                    gridOpen ? "rotate-180" : "chevron-nudge",
-                  ].join(" ")}
-                />
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                  <ChevronDown
+                    size={20}
+                    strokeWidth={2.75}
+                    className={[
+                      "transition-transform duration-200",
+                      gridOpen ? "rotate-180" : "chevron-nudge",
+                    ].join(" ")}
+                  />
+                </span>
               </button>
 
               {gridOpen && (
-                <div className="animate-fade-in mt-4">
+                <div className="animate-fade-in mt-4 rounded-[2rem] bg-surface p-4">
                   {Array.from({ length: GRID_ROWS }, (_, r) => renderRow(r))}
                 </div>
               )}
             </section>
 
             {/* Registre des récompenses */}
-            <section className="mt-12">
-              <h2 className="mb-2 font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                Vos récompenses du mois
-              </h2>
-              <div>
+            <section className="mt-8">
+              <h2 className="mb-3 font-display text-2xl font-extrabold">Vos récompenses</h2>
+              <div className="space-y-2">
                 {rewards.map((r) => {
                   const unlocked = visits >= r.visit;
                   return (
-                    <div key={r.id} className="flex items-center gap-5 border-t border-border py-5">
+                    <div
+                      key={r.id}
+                      className={[
+                        "flex items-center gap-4 rounded-3xl p-4 transition-colors duration-200",
+                        unlocked ? "bg-accent text-accent-foreground" : "bg-surface",
+                      ].join(" ")}
+                    >
                       <span
                         className={[
-                          "font-mono text-3xl font-bold tabular-nums",
-                          unlocked ? "text-accent-bright" : "text-muted-foreground/50",
+                          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl font-display text-xl font-extrabold tabular-nums",
+                          unlocked
+                            ? "bg-accent-foreground/10 text-accent-foreground"
+                            : "bg-surface-deep text-muted-foreground",
                         ].join(" ")}
                       >
-                        {String(r.visit).padStart(2, "0")}
+                        {r.visit}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p
                           className={[
-                            "text-sm font-semibold leading-snug",
-                            unlocked ? "text-foreground" : "text-muted-foreground",
+                            "font-display text-lg font-bold leading-tight",
+                            unlocked ? "" : "text-muted-foreground",
                           ].join(" ")}
                         >
                           {r.label}
-                          <span className="ml-2 font-normal text-muted-foreground">
-                            · {r.detail}
-                          </span>
                         </p>
                         <p
                           className={[
-                            "mt-1 font-mono text-[10px] font-medium uppercase tracking-[0.15em]",
-                            unlocked ? "text-accent-bright" : "text-muted-foreground/60",
+                            "mt-0.5 text-xs font-medium",
+                            unlocked ? "opacity-75" : "text-muted-foreground/70",
                           ].join(" ")}
                         >
-                          {unlocked
-                            ? "Débloquée — à réclamer au comptoir"
-                            : `À la visite n°${r.visit}`}
+                          {unlocked ? `${r.detail} — à réclamer au comptoir` : r.detail}
                         </p>
                       </div>
                     </div>
@@ -810,28 +790,26 @@ export default function App() {
 
             {/* Derniers passages */}
             {currentUser.history.length > 0 && (
-              <section className="mt-10">
-                <h2 className="mb-2 font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                  Vos derniers passages
-                </h2>
-                <div>
+              <section className="mt-8">
+                <h2 className="mb-3 font-display text-2xl font-extrabold">Vos derniers passages</h2>
+                <div className="overflow-hidden rounded-[2rem] bg-surface">
                   {[...currentUser.history]
                     .reverse()
                     .slice(0, 5)
                     .map((h, idx) => (
                       <div
                         key={h.id}
-                        className="flex items-baseline justify-between gap-4 border-t border-border py-4"
+                        className="flex items-baseline justify-between gap-4 px-5 py-4 [&+&]:border-t [&+&]:border-border/40"
                       >
                         <div className="min-w-0">
-                          <p className="text-sm font-semibold">
+                          <p className="font-display text-base font-bold">
                             Visite n°{currentUser.history.length - idx}
                           </p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {h.type === "instagram" ? "Story Instagram" : "Avis Google"}
                           </p>
                         </div>
-                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                        <span className="shrink-0 text-xs font-medium text-muted-foreground">
                           {formatDateFR(h.date)}
                         </span>
                       </div>
@@ -844,15 +822,11 @@ export default function App() {
           {/* Action principale */}
           <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md bg-gradient-to-t from-background via-background/95 to-transparent px-6 pb-6 pt-10">
             {journeyComplete ? (
-              <div className="flex h-14 items-center justify-center border-2 border-accent-bright px-5 text-center text-xs font-semibold uppercase tracking-[0.1em] text-accent-bright">
-                Parcours du mois terminé — bravo !
+              <div className="flex h-14 items-center justify-center rounded-full border-2 border-foreground px-5 text-center font-display text-base font-extrabold">
+                Parcours terminé — bravo !
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={openVisitDrawer}
-                className="h-14 w-full bg-accent text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
-              >
+              <button type="button" onClick={openVisitDrawer} className={btnPrimary}>
                 Tamponner ma visite
               </button>
             )}
@@ -860,7 +834,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleDemoStamp}
-                className="mt-2 h-9 w-full border border-dashed border-muted-foreground/50 font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground active:translate-y-px"
+                className="mt-2 h-9 w-full rounded-full border-2 border-dashed border-muted-foreground/40 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground active:scale-[0.98]"
               >
                 Temp — Simuler un tampon
               </button>
@@ -871,22 +845,20 @@ export default function App() {
 
       {/* ============================== CRÉATION DE CARTE ============================== */}
       {(signupOpen || createdUser) && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-5">
           <div
-            className="animate-fade-in absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={createdUser ? undefined : closeSignup}
           />
-          <div className="animate-fade-in-up relative max-h-[90vh] w-full max-w-sm overflow-y-auto border border-border bg-card p-6">
-            <div className="absolute left-6 top-0 h-1 w-16 bg-accent" />
+          <div className="animate-fade-in-up relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-[2rem] bg-background p-6 ring-2 ring-border">
             {!createdUser ? (
               <>
-                <div className="mb-6 flex items-start justify-between pt-2">
+                <div className="mb-6 flex items-start justify-between gap-3">
                   <div>
-                    <h2 className="text-2xl font-black uppercase leading-tight tracking-[-0.04em]">
-                      Bienvenue
-                      <span className="block text-accent-bright">au club.</span>
+                    <h2 className="font-display text-3xl font-extrabold leading-tight">
+                      Bienvenue au club.
                     </h2>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
                       Quelques infos et votre carte est prête.
                     </p>
                   </div>
@@ -894,18 +866,15 @@ export default function App() {
                     type="button"
                     onClick={closeSignup}
                     aria-label="Fermer"
-                    className="p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                    className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-surface hover:text-foreground"
                   >
-                    <X size={18} strokeWidth={1.5} />
+                    <X size={18} strokeWidth={2.5} />
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateCard} className="space-y-5">
+                <form onSubmit={handleCreateCard} className="space-y-4">
                   <div>
-                    <label
-                      htmlFor="signup-name"
-                      className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                    >
+                    <label htmlFor="signup-name" className={labelClass}>
                       Votre nom
                     </label>
                     <input
@@ -918,14 +887,11 @@ export default function App() {
                         setSignupName(e.target.value);
                         setSignupError("");
                       }}
-                      className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+                      className={inputClass}
                     />
                   </div>
                   <div>
-                    <label
-                      htmlFor="signup-nickname"
-                      className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                    >
+                    <label htmlFor="signup-nickname" className={labelClass}>
                       Votre surnom
                     </label>
                     <input
@@ -938,14 +904,11 @@ export default function App() {
                         setSignupNickname(e.target.value);
                         setSignupError("");
                       }}
-                      className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+                      className={inputClass}
                     />
                   </div>
                   <div>
-                    <label
-                      htmlFor="signup-phone"
-                      className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                    >
+                    <label htmlFor="signup-phone" className={labelClass}>
                       Votre téléphone
                     </label>
                     <input
@@ -959,18 +922,13 @@ export default function App() {
                         setSignupPhone(e.target.value);
                         setSignupError("");
                       }}
-                      className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+                      className={inputClass}
                     />
                   </div>
                   <div>
-                    <label
-                      htmlFor="signup-instagram"
-                      className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                    >
+                    <label htmlFor="signup-instagram" className={labelClass}>
                       Votre Instagram{" "}
-                      <span className="normal-case tracking-normal text-muted-foreground/60">
-                        (optionnel)
-                      </span>
+                      <span className="normal-case tracking-normal opacity-70">(optionnel)</span>
                     </label>
                     <input
                       id="signup-instagram"
@@ -979,40 +937,36 @@ export default function App() {
                       placeholder="@votrepseudo"
                       value={signupInsta}
                       onChange={(e) => setSignupInsta(e.target.value)}
-                      className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+                      className={inputClass}
                     />
                   </div>
-                  <label className="flex cursor-pointer items-start gap-3" htmlFor="signup-promo">
+                  <label
+                    className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface p-4"
+                    htmlFor="signup-promo"
+                  >
                     <input
                       id="signup-promo"
                       type="checkbox"
                       checked={signupPromo}
                       onChange={(e) => setSignupPromo(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer appearance-none border border-border bg-input transition-colors duration-150 checked:border-accent-bright checked:bg-accent"
+                      className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer appearance-none rounded-md bg-surface-deep ring-2 ring-border transition-colors duration-150 checked:bg-accent checked:ring-accent"
                     />
                     <span className="text-xs leading-relaxed text-muted-foreground">
-                      Je veux recevoir les offres exclusives et les bons plans du First.
+                      Je veux recevoir les offres exclusives et les bons plans Pickel'z.
                     </span>
                   </label>
                   {signupError && (
-                    <p className="animate-fade-in text-sm text-accent-bright">{signupError}</p>
+                    <p className="animate-fade-in text-sm font-medium">{signupError}</p>
                   )}
-                  <button
-                    type="submit"
-                    className="h-14 w-full bg-accent text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
-                  >
+                  <button type="submit" className={btnPrimary}>
                     Créer ma carte
                   </button>
                 </form>
               </>
             ) : (
-              <div className="pt-2 text-center">
-                <img
-                  src={IMG_LOGO}
-                  alt="The First — Coffee & Resto"
-                  className="mx-auto w-40 [filter:invert(1)] mix-blend-screen"
-                />
-                <h2 className="mt-5 text-2xl font-black uppercase leading-tight tracking-[-0.04em]">
+              <div className="text-center">
+                <img src={IMG_LOGO} alt="Pickel'z" className="mx-auto w-40" />
+                <h2 className="mt-6 font-display text-3xl font-extrabold leading-tight">
                   Bienvenue, {createdUser.nickname || createdUser.name.split(" ")[0]} !
                 </h2>
                 <p className="mx-auto mt-2 max-w-[280px] text-sm leading-relaxed text-muted-foreground">
@@ -1022,10 +976,10 @@ export default function App() {
 
                 <div
                   className={[
-                    "mx-auto mt-6 w-fit select-none border-2 px-8 py-4 font-mono text-3xl font-bold tracking-[0.2em] transition-all duration-700",
+                    "mx-auto mt-6 w-fit select-none rounded-2xl px-8 py-4 font-display text-4xl font-extrabold tracking-[0.1em] transition-all duration-700",
                     codeRevealed
-                      ? "animate-reveal-pulse border-accent-bright text-accent-bright blur-0"
-                      : "border-border text-foreground blur-md",
+                      ? "animate-reveal-pulse bg-accent text-accent-foreground blur-0"
+                      : "bg-surface text-foreground blur-md",
                   ].join(" ")}
                 >
                   {createdUser.id}
@@ -1036,7 +990,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setCodeRevealed(true)}
-                      className="h-14 w-full border border-foreground text-sm font-semibold uppercase tracking-[0.1em] text-foreground transition-colors duration-150 hover:bg-foreground hover:text-background active:translate-y-px"
+                      className={btnPrimary}
                     >
                       Révéler mon code
                     </button>
@@ -1045,22 +999,16 @@ export default function App() {
                       <button
                         type="button"
                         onClick={handleCopyCode}
-                        className={[
-                          "h-14 w-full border text-sm font-semibold uppercase tracking-[0.1em] transition-colors duration-150 active:translate-y-px",
+                        className={
                           codeCopied
-                            ? "border-accent-bright text-accent-bright"
-                            : "border-border text-foreground hover:border-foreground",
-                        ].join(" ")}
+                            ? "h-14 w-full rounded-full bg-surface font-display text-lg font-extrabold text-foreground"
+                            : btnGhost
+                        }
                       >
                         {codeCopied ? "Copié !" : "Copier le code"}
                       </button>
-                      <button
-                        type="button"
-                        onClick={closeSignup}
-                        className="flex h-14 w-full items-center justify-center gap-2 bg-accent text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
-                      >
+                      <button type="button" onClick={closeSignup} className={btnPrimary}>
                         Voir mon parcours
-                        <ArrowRight size={16} strokeWidth={1.5} />
                       </button>
                     </>
                   )}
@@ -1073,19 +1021,16 @@ export default function App() {
 
       {/* ============================== MES INFOS ============================== */}
       {profileOpen && currentUser && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-5">
           <div
-            className="animate-fade-in absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setProfileOpen(false)}
           />
-          <div className="animate-fade-in-up relative max-h-[90vh] w-full max-w-sm overflow-y-auto border border-border bg-card p-6">
-            <div className="absolute left-6 top-0 h-1 w-16 bg-accent" />
-            <div className="mb-6 flex items-start justify-between pt-2">
+          <div className="animate-fade-in-up relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-[2rem] bg-background p-6 ring-2 ring-border">
+            <div className="mb-6 flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-2xl font-black uppercase leading-tight tracking-[-0.04em]">
-                  Mes infos
-                </h2>
-                <p className="mt-2 font-mono text-xs font-medium tracking-[0.15em] text-accent-bright">
+                <h2 className="font-display text-3xl font-extrabold leading-tight">Mes infos</h2>
+                <p className="mt-1 text-sm font-semibold tracking-[0.12em] text-muted-foreground">
                   {currentUser.id}
                 </p>
               </div>
@@ -1093,18 +1038,15 @@ export default function App() {
                 type="button"
                 onClick={() => setProfileOpen(false)}
                 aria-label="Fermer"
-                className="p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-surface hover:text-foreground"
               >
-                <X size={18} strokeWidth={1.5} />
+                <X size={18} strokeWidth={2.5} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveProfile} className="space-y-5">
+            <form onSubmit={handleSaveProfile} className="space-y-4">
               <div>
-                <label
-                  htmlFor="profile-name"
-                  className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                >
+                <label htmlFor="profile-name" className={labelClass}>
                   Votre nom
                 </label>
                 <input
@@ -1115,14 +1057,11 @@ export default function App() {
                     setProfileName(e.target.value);
                     setProfileError("");
                   }}
-                  className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 focus:border-accent-bright"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label
-                  htmlFor="profile-nickname"
-                  className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                >
+                <label htmlFor="profile-nickname" className={labelClass}>
                   Votre surnom
                 </label>
                 <input
@@ -1133,14 +1072,11 @@ export default function App() {
                     setProfileNickname(e.target.value);
                     setProfileError("");
                   }}
-                  className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 focus:border-accent-bright"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label
-                  htmlFor="profile-phone"
-                  className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                >
+                <label htmlFor="profile-phone" className={labelClass}>
                   Votre téléphone
                 </label>
                 <input
@@ -1151,18 +1087,13 @@ export default function App() {
                     setProfilePhone(e.target.value);
                     setProfileError("");
                   }}
-                  className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 focus:border-accent-bright"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label
-                  htmlFor="profile-instagram"
-                  className="mb-2 block font-mono text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground"
-                >
+                <label htmlFor="profile-instagram" className={labelClass}>
                   Votre Instagram{" "}
-                  <span className="normal-case tracking-normal text-muted-foreground/60">
-                    (optionnel)
-                  </span>
+                  <span className="normal-case tracking-normal opacity-70">(optionnel)</span>
                 </label>
                 <input
                   id="profile-instagram"
@@ -1170,32 +1101,32 @@ export default function App() {
                   placeholder="@votrepseudo"
                   value={profileInsta}
                   onChange={(e) => setProfileInsta(e.target.value)}
-                  className="h-14 w-full border border-border bg-input px-4 text-base text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-accent-bright"
+                  className={inputClass}
                 />
               </div>
-              <label className="flex cursor-pointer items-start gap-3" htmlFor="profile-promo">
+              <label
+                className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface p-4"
+                htmlFor="profile-promo"
+              >
                 <input
                   id="profile-promo"
                   type="checkbox"
                   checked={profilePromo}
                   onChange={(e) => setProfilePromo(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer appearance-none border border-border bg-input transition-colors duration-150 checked:border-accent-bright checked:bg-accent"
+                  className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer appearance-none rounded-md bg-surface-deep ring-2 ring-border transition-colors duration-150 checked:bg-accent checked:ring-accent"
                 />
                 <span className="text-xs leading-relaxed text-muted-foreground">
-                  Je veux recevoir les offres exclusives et les bons plans du First.
+                  Je veux recevoir les offres exclusives et les bons plans Pickel'z.
                 </span>
               </label>
-              {profileError && (
-                <p className="animate-fade-in text-sm text-accent-bright">{profileError}</p>
-              )}
+              {profileError && <p className="animate-fade-in text-sm font-medium">{profileError}</p>}
               <button
                 type="submit"
-                className={[
-                  "h-14 w-full text-sm font-semibold uppercase tracking-[0.1em] transition-colors duration-150 active:translate-y-px",
+                className={
                   profileSaved
-                    ? "border border-accent-bright text-accent-bright"
-                    : "bg-accent text-accent-foreground hover:bg-[#93293a]",
-                ].join(" ")}
+                    ? "h-14 w-full rounded-full bg-surface font-display text-lg font-extrabold text-foreground"
+                    : btnPrimary
+                }
               >
                 {profileSaved ? "Enregistré !" : "Enregistrer"}
               </button>
@@ -1208,69 +1139,63 @@ export default function App() {
       {visitOpen && currentUser && (
         <div className="fixed inset-0 z-50">
           <div
-            className="animate-fade-in absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={closeVisitDrawer}
           />
-          <div className="animate-slide-up absolute inset-x-0 bottom-0 mx-auto w-full max-w-md border-t-2 border-accent bg-card px-6 pb-8 pt-6">
+          <div className="animate-slide-up absolute inset-x-0 bottom-0 mx-auto w-full max-w-md rounded-t-[2.5rem] bg-background px-6 pb-8 pt-4">
+            <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-border" />
+
             {visitStep === "proof" && (
               <div className="animate-fade-in">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
                       Étape 1 / 3
                     </p>
-                    <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em]">
-                      On tamponne ?
-                    </h2>
+                    <h2 className="mt-1 font-display text-3xl font-extrabold">On tamponne ?</h2>
                   </div>
                   <button
                     type="button"
                     onClick={closeVisitDrawer}
                     aria-label="Fermer"
-                    className="p-1 text-muted-foreground transition-colors duration-150 hover:text-foreground"
+                    className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-surface hover:text-foreground"
                   >
-                    <X size={18} strokeWidth={1.5} />
+                    <X size={18} strokeWidth={2.5} />
                   </button>
                 </div>
-                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
                   Dites-nous comment vous avez partagé votre visite aujourd'hui.
                 </p>
-                <div className="mt-6">
+                <div className="mt-5 space-y-3">
                   <button
                     type="button"
                     onClick={() => handleSelectProof("instagram")}
-                    className="group flex w-full items-center justify-between gap-4 border-t border-border py-5 text-left transition-colors duration-150 hover:bg-muted active:translate-y-px"
+                    className="flex w-full items-center justify-between gap-4 rounded-3xl bg-surface p-5 text-left transition-colors duration-150 hover:bg-raised active:scale-[0.98]"
                   >
                     <div>
-                      <p className="text-sm font-bold uppercase tracking-[0.05em]">
-                        Story Instagram
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Vous avez tagué @TheFirstCoffee dans une story
+                      <p className="font-display text-xl font-bold">Story Instagram</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Vous avez tagué {INSTA_HANDLE} dans une story
                       </p>
                     </div>
-                    <ArrowRight
-                      size={16}
-                      strokeWidth={1.5}
-                      className="shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-accent-bright"
-                    />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                      <ArrowRight size={18} strokeWidth={2.75} />
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSelectProof("google")}
-                    className="group flex w-full items-center justify-between gap-4 border-t border-b border-border py-5 text-left transition-colors duration-150 hover:bg-muted active:translate-y-px"
+                    className="flex w-full items-center justify-between gap-4 rounded-3xl bg-surface p-5 text-left transition-colors duration-150 hover:bg-raised active:scale-[0.98]"
                   >
                     <div>
-                      <p className="text-sm font-bold uppercase tracking-[0.05em]">Avis Google</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="font-display text-xl font-bold">Avis Google</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
                         Vous avez laissé un avis avec une photo du lieu
                       </p>
                     </div>
-                    <ArrowRight
-                      size={16}
-                      strokeWidth={1.5}
-                      className="shrink-0 text-muted-foreground transition-colors duration-150 group-hover:text-accent-bright"
-                    />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                      <ArrowRight size={18} strokeWidth={2.75} />
+                    </span>
                   </button>
                 </div>
               </div>
@@ -1278,13 +1203,11 @@ export default function App() {
 
             {visitStep === "server" && (
               <div className="animate-fade-in">
-                <p className="font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
                   Étape 2 / 3
                 </p>
-                <h2 className="mt-1 text-2xl font-black uppercase tracking-[-0.04em]">
-                  Au tour du serveur.
-                </h2>
-                <p className="mt-2 max-w-[300px] text-sm leading-relaxed text-muted-foreground">
+                <h2 className="mt-1 font-display text-3xl font-extrabold">Au tour de l'équipe.</h2>
+                <p className="mt-2 max-w-[320px] text-sm leading-relaxed text-muted-foreground">
                   Confiez votre téléphone à un membre de l'équipe : il valide votre visite avec son
                   code personnel.
                 </p>
@@ -1292,17 +1215,16 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setVisitStep("pin")}
-                    className="h-14 w-full bg-accent text-sm font-semibold uppercase tracking-[0.1em] text-accent-foreground transition-colors duration-150 hover:bg-[#93293a] active:translate-y-px"
+                    className={btnPrimary}
                   >
-                    Saisir le code serveur
+                    Saisir le code équipe
                   </button>
                   <button
                     type="button"
                     onClick={() => setVisitStep("proof")}
-                    className="group relative mx-auto block py-2 font-mono text-xs font-medium uppercase tracking-[0.15em] text-muted-foreground transition-colors duration-150 hover:text-foreground active:translate-y-px"
+                    className="mx-auto block rounded-full px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors duration-150 hover:text-foreground active:scale-95"
                   >
                     Retour
-                    <span className="absolute bottom-0 left-0 h-px w-full origin-left scale-x-0 bg-foreground transition-transform duration-150 group-hover:scale-x-100" />
                   </button>
                 </div>
               </div>
@@ -1310,11 +1232,11 @@ export default function App() {
 
             {visitStep === "pin" && (
               <div className="animate-fade-in">
-                <p className="text-center font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="text-center text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
                   Étape 3 / 3
                 </p>
-                <h2 className="mt-1 text-center text-2xl font-black uppercase tracking-[-0.04em]">
-                  Code serveur
+                <h2 className="mt-1 text-center font-display text-3xl font-extrabold">
+                  Code équipe
                 </h2>
                 <p className="mt-1 text-center text-sm text-muted-foreground">
                   4 chiffres, réservé à l'équipe.
@@ -1330,12 +1252,12 @@ export default function App() {
                     <div
                       key={i}
                       className={[
-                        "flex h-14 w-12 items-center justify-center border-2 font-mono text-2xl font-bold transition-colors duration-150",
-                        pinError
-                          ? "border-accent-bright text-accent-bright"
+                        "flex h-16 w-14 items-center justify-center rounded-2xl font-display text-3xl font-extrabold transition-colors duration-150",
+                        pin[i]
+                          ? "bg-accent text-accent-foreground"
                           : pin.length === i
-                            ? "border-accent-bright bg-input text-foreground"
-                            : "border-border bg-input text-foreground",
+                            ? "bg-surface ring-2 ring-foreground"
+                            : "bg-surface",
                       ].join(" ")}
                     >
                       {pin[i] ? "•" : ""}
@@ -1344,20 +1266,20 @@ export default function App() {
                 </div>
                 <p
                   className={[
-                    "mt-3 h-5 text-center text-sm font-semibold text-accent-bright",
+                    "mt-3 h-5 text-center text-sm font-semibold",
                     pinError ? "animate-fade-in" : "invisible",
                   ].join(" ")}
                 >
                   {pinError || "—"}
                 </p>
 
-                <div className="mx-auto mt-2 grid max-w-[280px] grid-cols-3 gap-2">
+                <div className="mx-auto mt-2 grid max-w-[300px] grid-cols-3 gap-2.5">
                   {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
                     <button
                       key={d}
                       type="button"
                       onClick={() => handleKeypadPress(d)}
-                      className="border border-border bg-input py-4 font-mono text-xl font-semibold text-foreground transition-colors duration-100 hover:border-foreground active:translate-y-px"
+                      className="rounded-2xl bg-surface py-4 font-display text-2xl font-bold text-foreground transition-colors duration-100 hover:bg-raised active:scale-95"
                     >
                       {d}
                     </button>
@@ -1365,14 +1287,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={closeVisitDrawer}
-                    className="py-4 font-mono text-[10px] font-medium uppercase tracking-[0.15em] text-muted-foreground transition-colors duration-100 hover:text-foreground active:translate-y-px"
+                    className="rounded-2xl py-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors duration-100 hover:text-foreground active:scale-95"
                   >
                     Annuler
                   </button>
                   <button
                     type="button"
                     onClick={() => handleKeypadPress("0")}
-                    className="border border-border bg-input py-4 font-mono text-xl font-semibold text-foreground transition-colors duration-100 hover:border-foreground active:translate-y-px"
+                    className="rounded-2xl bg-surface py-4 font-display text-2xl font-bold text-foreground transition-colors duration-100 hover:bg-raised active:scale-95"
                   >
                     0
                   </button>
@@ -1380,7 +1302,7 @@ export default function App() {
                     type="button"
                     onClick={handleKeypadDelete}
                     aria-label="Effacer un chiffre"
-                    className="border border-border bg-input py-4 font-mono text-xl text-foreground transition-colors duration-100 hover:border-foreground active:translate-y-px"
+                    className="rounded-2xl bg-surface py-4 font-display text-2xl font-bold text-foreground transition-colors duration-100 hover:bg-raised active:scale-95"
                   >
                     ⌫
                   </button>

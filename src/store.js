@@ -5,10 +5,15 @@ export const SERVER_CODES = ["1111", "2222", "5555", "7777"];
 export const MAX_VISITS = 50;
 export const ADMIN_PASS = "0000"; // ponytail: stocké en local pour l'instant — Supabase ensuite
 
-// Chemins d'assets valables en dev ("/") comme sur GitHub Pages ("/Thefirst/")
-export const IMG_STAMP = `${import.meta.env.BASE_URL}images/stamp.png`;
-export const IMG_LOGO = `${import.meta.env.BASE_URL}images/logo.png`;
+// Chemins d'assets valables en dev comme sur GitHub Pages ("/Thefirst/")
+export const IMG_STAMP = `${import.meta.env.BASE_URL}images/stamp.svg`;
+export const IMG_LOGO = `${import.meta.env.BASE_URL}images/logo-cream.png`;
+export const IMG_LOGO_MAUVE = `${import.meta.env.BASE_URL}images/logo-mauve.png`;
 export const BASE = import.meta.env.BASE_URL;
+
+export const BRAND = "Pickel'z";
+export const TAGLINE = "Burger and more !";
+export const INSTA_HANDLE = "@pickelz";
 
 // Récompenses par défaut — du moins cher au plus cher ; sans plafond aux paliers élevés
 export const DEFAULT_REWARDS = [
@@ -19,16 +24,16 @@ export const DEFAULT_REWARDS = [
   { id: "r-27", visit: 27, label: "10% de réduction", detail: "Sans plafond", kind: "discount", capped: false, activeFrom: "", activeTo: "" },
   { id: "r-33", visit: 33, label: "20% de réduction", detail: "Sans plafond", kind: "discount", capped: false, activeFrom: "", activeTo: "" },
   { id: "r-40", visit: 40, label: "40% de réduction", detail: "Sans plafond", kind: "discount", capped: false, activeFrom: "", activeTo: "" },
-  { id: "r-50", visit: 50, label: "Frappuccino Oreo offert", detail: "Le boss final, bien mérité", kind: "treat", capped: false, activeFrom: "", activeTo: "" },
+  { id: "r-50", visit: 50, label: "Milkshake Oreo offert", detail: "Le boss final, bien mérité", kind: "treat", capped: false, activeFrom: "", activeTo: "" },
 ];
 
 // 5 titres, de plus en plus prestigieux
 export const DEFAULT_TITLES = [
-  { min: 0, label: "Première Gorgée" },
-  { min: 10, label: "Visage Familier" },
-  { min: 20, label: "Cœur de la Maison" },
-  { min: 35, label: "Pilier du Comptoir" },
-  { min: 50, label: "Légende du First" },
+  { min: 0, label: "Petite Faim" },
+  { min: 10, label: "Habitué du Comptoir" },
+  { min: 20, label: "Grand Croqueur" },
+  { min: 35, label: "Maître du Burger" },
+  { min: 50, label: "Légende Pickel'z" },
 ];
 
 export function getTitle(titles, visits) {

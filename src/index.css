@@ -1,26 +1,39 @@
 @import "tailwindcss";
 
-/* Bold Typography design tokens — single source of truth */
+/* ============================================================
+   Pickel'z — jetons de marque (Brand Guidelines)
+   Old Mauve #673447 (50%) · Apricot White #FFE0C4 (25%)
+   Display : ARB-218 Big Blunt MAR-50 → Baloo 2 (équivalent web)
+   Texte   : Poppins
+   ============================================================ */
 @theme {
-  --color-background: #0a0a0a;
-  --color-foreground: #fafafa;
-  --color-muted: #1a1a1a;
-  --color-muted-foreground: #737373;
-  --color-accent: #7d2231; /* wine red sampled from brand swatch */
-  --color-accent-bright: #d96c7c; /* AA-legible accent for text on dark */
-  --color-accent-foreground: #fafafa;
-  --color-border: #262626;
-  --color-input: #1a1a1a;
-  --color-card: #0f0f0f;
+  --color-background: #673447; /* Old Mauve — surface dominante */
+  --color-surface: #53293a; /* puits mauve profond (cartes, champs) */
+  --color-surface-deep: #48222f; /* creux (grille, pavé numérique) */
+  --color-raised: #7a4155; /* survol / élévation */
+  --color-border: #8a5766;
+  --color-foreground: #ffe0c4; /* Apricot White */
+  --color-muted-foreground: #d1ac9f; /* AA 4.68:1 sur Old Mauve */
+  --color-accent: #ffe0c4; /* remplissage des CTA */
+  --color-accent-foreground: #673447; /* texte sur CTA */
 
-  --font-sans: "Inter Tight", "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  /* Graphiques : paire catégorielle validée (bande L, chroma, CVD ΔE 80, contraste) */
+  --color-chart-1: #c87a2f;
+  --color-chart-2: #3e93c9;
+
+  --font-display: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --font-sans: "Poppins", system-ui, -apple-system, sans-serif;
 }
 
 html,
 body {
-  background: #0a0a0a;
+  background: #673447;
   /* Les popovers react-aria se montent sur <body> : ils doivent hériter du thème */
-  font-family: "Inter Tight", "Inter", system-ui, sans-serif;
-  color: #fafafa;
+  font-family: "Poppins", system-ui, -apple-system, sans-serif;
+  color: #ffe0c4;
+}
+
+/* Baloo 2 porte une métrique verticale généreuse : on la resserre pour les titres */
+.font-display {
+  line-height: 1.02;
 }
