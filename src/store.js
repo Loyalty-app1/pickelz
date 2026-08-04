@@ -2,10 +2,22 @@
 
 export const STORAGE_KEY = "tfc_fidelite";
 export const SERVER_CODES = ["1111", "2222", "5555", "7777"];
-export const MAX_VISITS = 50;
 export const ADMIN_PASS = "0000"; // ponytail: stocké en local pour l'instant — Supabase ensuite
 
-// Chemins d'assets valables en dev comme sur GitHub Pages ("/Thefirst/")
+// Taille de carte : l'admin la choisit. La grille fait 5 colonnes, donc la taille
+// est un multiple de 5 (pas de rangée partielle à dessiner).
+export const CARD_STEP = 5;
+export const DEFAULT_CARD_SIZE = 50;
+export const MAX_CARD_SIZE = 100;
+
+export function sanitizeCardSize(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return DEFAULT_CARD_SIZE;
+  const clamped = Math.min(MAX_CARD_SIZE, Math.max(CARD_STEP, Math.round(n)));
+  return Math.round(clamped / CARD_STEP) * CARD_STEP;
+}
+
+// Chemins d'assets valables en dev comme sur GitHub Pages (sous-chemin GitHub Pages)
 export const IMG_STAMP = `${import.meta.env.BASE_URL}images/stamp.png`;
 export const IMG_LOGO = `${import.meta.env.BASE_URL}images/logo-cream.png`;
 export const IMG_LOGO_MAUVE = `${import.meta.env.BASE_URL}images/logo-mauve.png`;
@@ -62,8 +74,9 @@ export function isSameMonth(iso, ref = new Date()) {
 
 // Le parcours repart à zéro chaque mois : le compteur est TOUJOURS dérivé
 // des visites du mois en cours (l'historique complet, lui, est conservé).
-export function monthVisits(user, ref = new Date()) {
-  return Math.min(user.history.filter((h) => isSameMonth(h.date, ref)).length, MAX_VISITS);
+// Plafonné à la taille de carte configurée par l'admin.
+export function monthVisits(user, cardSize = DEFAULT_CARD_SIZE, ref = new Date()) {
+  return Math.min(user.history.filter((h) => isSameMonth(h.date, ref)).length, cardSize);
 }
 
 function normalizeUser(u) {
@@ -82,7 +95,13 @@ export function loadDB() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { users: [], currentUserId: null, rewards: DEFAULT_REWARDS, titles: DEFAULT_TITLES };
+      return {
+        users: [],
+        currentUserId: null,
+        rewards: DEFAULT_REWARDS,
+        titles: DEFAULT_TITLES,
+        cardSize: DEFAULT_CARD_SIZE,
+      };
     }
     const parsed = JSON.parse(raw);
     return {
@@ -94,9 +113,16 @@ export function loadDB() {
           : DEFAULT_REWARDS,
       titles:
         Array.isArray(parsed.titles) && parsed.titles.length > 0 ? parsed.titles : DEFAULT_TITLES,
+      cardSize: parsed.cardSize == null ? DEFAULT_CARD_SIZE : sanitizeCardSize(parsed.cardSize),
     };
   } catch {
-    return { users: [], currentUserId: null, rewards: DEFAULT_REWARDS, titles: DEFAULT_TITLES };
+    return {
+      users: [],
+      currentUserId: null,
+      rewards: DEFAULT_REWARDS,
+      titles: DEFAULT_TITLES,
+      cardSize: DEFAULT_CARD_SIZE,
+    };
   }
 }
 
@@ -195,6 +221,7 @@ export function seedDemoDB() {
     currentUserId: null,
     rewards: DEFAULT_REWARDS,
     titles: DEFAULT_TITLES,
+    cardSize: DEFAULT_CARD_SIZE,
   };
   saveDB(db);
   return db;

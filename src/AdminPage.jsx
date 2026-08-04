@@ -4,7 +4,9 @@ import { getLocalTimeZone } from "@internationalized/date";
 import DateRange from "./DateRange.jsx";
 import {
   ADMIN_PASS,
-  MAX_VISITS,
+  MAX_CARD_SIZE,
+  CARD_STEP,
+  sanitizeCardSize,
   IMG_STAMP,
   IMG_LOGO,
   TAGLINE,
@@ -398,6 +400,7 @@ export function AdminDashboard() {
   }, [db]);
 
   const users = db.users;
+  const cardSize = db.cardSize;
   const rewards = useMemo(() => activeRewards(db.rewards), [db.rewards]);
 
   const inRange = useMemo(() => {
@@ -443,11 +446,11 @@ export function AdminDashboard() {
     const discountRewards = rewards.filter((r) => r.kind === "discount");
     const treatRewards = rewards.filter((r) => r.kind !== "discount");
     const discountsGiven = users.reduce(
-      (n, u) => n + discountRewards.filter((r) => monthVisits(u) >= r.visit).length,
+      (n, u) => n + discountRewards.filter((r) => monthVisits(u, cardSize) >= r.visit).length,
       0
     );
     const treatsGiven = users.reduce(
-      (n, u) => n + treatRewards.filter((r) => monthVisits(u) >= r.visit).length,
+      (n, u) => n + treatRewards.filter((r) => monthVisits(u, cardSize) >= r.visit).length,
       0
     );
 
@@ -467,14 +470,14 @@ export function AdminDashboard() {
 
     const byTitle = db.titles.map((t) => ({
       label: t.label.split(" ")[0],
-      value: users.filter((u) => getTitle(db.titles, monthVisits(u)) === t.label).length,
+      value: users.filter((u) => getTitle(db.titles, monthVisits(u, cardSize)) === t.label).length,
     }));
 
     const rewardBars = rewards.map((r) => ({
       key: r.id,
       visit: r.visit,
       label: r.label,
-      value: users.filter((u) => monthVisits(u) >= r.visit).length,
+      value: users.filter((u) => monthVisits(u, cardSize) >= r.visit).length,
     }));
 
     return {
@@ -495,7 +498,7 @@ export function AdminDashboard() {
       byTitle,
       rewardBars,
     };
-  }, [users, rewards, db.titles, inRange, proofFilter]);
+  }, [users, rewards, db.titles, inRange, proofFilter, cardSize]);
 
   const visibleUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -508,8 +511,8 @@ export function AdminDashboard() {
             (u.instagram || "").toLowerCase().includes(q.replace(/^@/, ""))
         )
       : users;
-    return [...list].sort((a, b) => monthVisits(b) - monthVisits(a));
-  }, [users, search]);
+    return [...list].sort((a, b) => monthVisits(b, cardSize) - monthVisits(a, cardSize));
+  }, [users, search, cardSize]);
 
   function handleSeed() {
     setDb(seedDemoDB());
@@ -694,10 +697,10 @@ export function AdminDashboard() {
                       <td className="px-5 py-3.5 font-semibold">{u.name}</td>
                       <td className="px-5 py-3.5 text-muted-foreground">{u.nickname || "—"}</td>
                       <td className="px-5 py-3.5 text-muted-foreground">
-                        {getTitle(db.titles, monthVisits(u))}
+                        {getTitle(db.titles, monthVisits(u, cardSize))}
                       </td>
                       <td className="px-5 py-3.5 text-right font-bold tabular-nums">
-                        {monthVisits(u)}
+                        {monthVisits(u, cardSize)}
                       </td>
                       <td className="px-5 py-3.5 text-right tabular-nums text-muted-foreground">
                         {u.history.length}
@@ -749,8 +752,8 @@ export function AdminDashboard() {
               {[
                 ["Téléphone", selectedUser.phone],
                 ["Instagram", selectedUser.instagram ? `@${selectedUser.instagram}` : "—"],
-                ["Titre", getTitle(db.titles, monthVisits(selectedUser))],
-                ["Parcours du mois", `${monthVisits(selectedUser)} / ${MAX_VISITS}`],
+                ["Titre", getTitle(db.titles, monthVisits(selectedUser, cardSize))],
+                ["Parcours du mois", `${monthVisits(selectedUser, cardSize)} / ${cardSize}`],
                 ["Visites totales", String(selectedUser.history.length)],
                 ["Offres promos", selectedUser.promoOptIn ? "Acceptées" : "Refusées"],
               ].map(([k, v]) => (
@@ -768,11 +771,11 @@ export function AdminDashboard() {
                 Récompenses débloquées ce mois-ci
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {rewards.filter((r) => monthVisits(selectedUser) >= r.visit).length === 0 ? (
+                {rewards.filter((r) => monthVisits(selectedUser, cardSize) >= r.visit).length === 0 ? (
                   <span className="text-sm text-muted-foreground">Aucune pour l'instant.</span>
                 ) : (
                   rewards
-                    .filter((r) => monthVisits(selectedUser) >= r.visit)
+                    .filter((r) => monthVisits(selectedUser, cardSize) >= r.visit)
                     .map((r) => (
                       <span
                         key={r.id}
@@ -865,8 +868,8 @@ export function AdminRewardsPage() {
   function handleSave(e) {
     e.preventDefault();
     const visit = Number(editing.visit);
-    if (!Number.isInteger(visit) || visit < 1 || visit > MAX_VISITS) {
-      setFormError(`Le palier doit être un entier entre 1 et ${MAX_VISITS}.`);
+    if (!Number.isInteger(visit) || visit < 1 || visit > db.cardSize) {
+      setFormError(`Le palier doit être un entier entre 1 et ${db.cardSize} (taille de la carte).`);
       return;
     }
     if (db.rewards.some((r) => r.visit === visit && r.id !== editing.id)) {
@@ -924,7 +927,45 @@ export function AdminRewardsPage() {
           </button>
         </div>
 
-        <div className="mt-6 overflow-x-auto rounded-3xl bg-surface">
+        {/* Taille de la carte — décidée par l'admin */}
+        <div className="mt-6 flex flex-wrap items-center gap-4 rounded-3xl bg-surface p-5">
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-lg font-bold">Taille de la carte</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Nombre de tampons à collecter chaque mois. Multiple de {CARD_STEP} (grille à 5
+              colonnes), de {CARD_STEP} à {MAX_CARD_SIZE}.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Diminuer"
+              onClick={() =>
+                setDb((prev) => ({ ...prev, cardSize: sanitizeCardSize(prev.cardSize - CARD_STEP) }))
+              }
+              disabled={db.cardSize <= CARD_STEP}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-deep font-display text-2xl font-bold text-foreground transition-colors duration-150 hover:bg-raised active:scale-95 disabled:opacity-30"
+            >
+              −
+            </button>
+            <div className="flex h-12 w-20 items-center justify-center rounded-2xl bg-accent font-display text-2xl font-extrabold tabular-nums text-accent-foreground">
+              {db.cardSize}
+            </div>
+            <button
+              type="button"
+              aria-label="Augmenter"
+              onClick={() =>
+                setDb((prev) => ({ ...prev, cardSize: sanitizeCardSize(prev.cardSize + CARD_STEP) }))
+              }
+              disabled={db.cardSize >= MAX_CARD_SIZE}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-deep font-display text-2xl font-bold text-foreground transition-colors duration-150 hover:bg-raised active:scale-95 disabled:opacity-30"
+            >
+              +
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-4 overflow-x-auto rounded-3xl bg-surface">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -936,11 +977,16 @@ export function AdminRewardsPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((r) => (
+              {sorted.map((r) => {
+                const outOfCard = r.visit > db.cardSize;
+                return (
                 <tr
                   key={r.id}
                   onClick={() => openEdit(r)}
-                  className="cursor-pointer border-b border-border/30 transition-colors duration-150 last:border-b-0 hover:bg-raised"
+                  className={[
+                    "cursor-pointer border-b border-border/30 transition-colors duration-150 last:border-b-0 hover:bg-raised",
+                    outOfCard ? "opacity-45" : "",
+                  ].join(" ")}
                 >
                   <td className="px-5 py-4">
                     <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent font-display text-base font-extrabold tabular-nums text-accent-foreground">
@@ -948,7 +994,14 @@ export function AdminRewardsPage() {
                     </span>
                   </td>
                   <td className="px-5 py-4">
-                    <p className="font-display text-base font-bold">{r.label}</p>
+                    <p className="font-display text-base font-bold">
+                      {r.label}
+                      {outOfCard && (
+                        <span className="ml-2 rounded-full bg-surface-deep px-2 py-0.5 align-middle text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                          Hors carte
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">{r.detail}</p>
                   </td>
                   <td className="px-5 py-4 text-muted-foreground">
@@ -963,7 +1016,8 @@ export function AdminRewardsPage() {
                       : "Permanente"}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1000,7 +1054,7 @@ export function AdminRewardsPage() {
                   <input
                     type="number"
                     min="1"
-                    max={MAX_VISITS}
+                    max={db.cardSize}
                     value={editing.visit}
                     onChange={(e) => set("visit", e.target.value)}
                     className={INPUT}
@@ -1137,8 +1191,8 @@ export function AdminTitlesPage() {
       return;
     }
     for (let i = 0; i < rows.length; i++) {
-      if (!Number.isInteger(rows[i].min) || rows[i].min < 0 || rows[i].min > MAX_VISITS) {
-        setError(`Palier n°${i + 1} : le seuil doit être entre 0 et ${MAX_VISITS}.`);
+      if (!Number.isInteger(rows[i].min) || rows[i].min < 0 || rows[i].min > db.cardSize) {
+        setError(`Palier n°${i + 1} : le seuil doit être entre 0 et ${db.cardSize} (taille de la carte).`);
         return;
       }
       if (rows[i].label.length < 2) {
@@ -1177,7 +1231,7 @@ export function AdminTitlesPage() {
               <input
                 type="number"
                 min="0"
-                max={MAX_VISITS}
+                max={db.cardSize}
                 value={t.min}
                 disabled={i === 0}
                 onChange={(e) => setRow(i, "min", e.target.value)}

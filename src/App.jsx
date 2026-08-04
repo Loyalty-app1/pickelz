@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from "react";
 import { X, ArrowRight, ChevronDown } from "lucide-react";
 import {
   SERVER_CODES,
-  MAX_VISITS,
   IMG_STAMP,
   IMG_LOGO,
   TAGLINE,
@@ -22,9 +21,11 @@ import {
 const STAMP_ROTATIONS = [-7, 5, -4, 8, -6, 3, 7, -5, 4, -8];
 
 const GRID_COLS = 5;
-const GRID_ROWS = MAX_VISITS / GRID_COLS;
 // Demi-largeur de cellule : 5 colonnes, 4 gouttières de 0.5rem
 const CELL_INSET = "calc((100% - 2rem) / 10)";
+
+// Confettis de la petite célébration (récompense débloquée)
+const CONFETTI_COLORS = ["#FFE0C4", "#FFFFFF", "#C87A2F", "#D1AC9F"];
 
 export default function App() {
   const [db, setDb] = useState(loadDB);
@@ -81,8 +82,28 @@ export default function App() {
   }, [pin, visitStep, visitOpen]);
 
   const currentUser = db.users.find((u) => u.id === db.currentUserId) || null;
-  const rewards = useMemo(() => activeRewards(db.rewards), [db.rewards]);
-  const visits = currentUser ? monthVisits(currentUser) : 0;
+  const cardSize = db.cardSize;
+  const gridRows = Math.ceil(cardSize / GRID_COLS);
+  // Seules les récompenses atteignables sur la carte actuelle
+  const rewards = useMemo(
+    () => activeRewards(db.rewards).filter((r) => r.visit <= cardSize),
+    [db.rewards, cardSize]
+  );
+  const visits = currentUser ? monthVisits(currentUser, cardSize) : 0;
+
+  const confettiPieces = useMemo(() => {
+    if (!rewardBanner) return [];
+    return Array.from({ length: 44 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 0.6,
+      duration: 2.2 + Math.random() * 1.8,
+      size: 6 + Math.random() * 8,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      rotate: Math.random() * 360,
+      round: i % 3 === 0,
+    }));
+  }, [rewardBanner]);
 
   function handleLogin(e) {
     e.preventDefault();
@@ -248,7 +269,7 @@ export default function App() {
   }
 
   function openVisitDrawer() {
-    if (!currentUser || visits >= MAX_VISITS) return;
+    if (!currentUser || visits >= cardSize) return;
     setVisitStep("proof");
     setProofType(null);
     setPin("");
@@ -287,7 +308,7 @@ export default function App() {
   function applyStamp(type, serverCode) {
     const user = db.users.find((u) => u.id === db.currentUserId);
     if (!user) return;
-    const newCount = Math.min(monthVisits(user) + 1, MAX_VISITS);
+    const newCount = Math.min(monthVisits(user, cardSize) + 1, cardSize);
     const record = {
       id: generateRecordId(),
       date: new Date().toISOString(),
@@ -303,12 +324,13 @@ export default function App() {
     setTimeout(() => {
       setGridOpen(true);
       setJustStamped(newCount);
-      const reward = rewards.find((r) => r.visit === newCount);
-      if (reward) setRewardBanner(reward);
       setTimeout(() => {
         const cell = document.getElementById(`cell-${newCount}`);
         if (cell) cell.scrollIntoView({ behavior: "smooth", block: "center" });
       }, 80);
+      // On laisse le tampon "claquer" sur la carte avant de célébrer la récompense
+      const reward = rewards.find((r) => r.visit === newCount);
+      if (reward) setTimeout(() => setRewardBanner(reward), 620);
     }, 350);
   }
 
@@ -328,13 +350,13 @@ export default function App() {
 
   // TEMP : simule un tampon validé sans passer par le serveur
   function handleDemoStamp() {
-    if (!currentUser || visits >= MAX_VISITS) return;
+    if (!currentUser || visits >= cardSize) return;
     setJustStamped(null);
     setRewardBanner(null);
     applyStamp(Math.random() < 0.5 ? "instagram" : "google", "1111");
   }
 
-  const journeyComplete = visits >= MAX_VISITS;
+  const journeyComplete = visits >= cardSize;
   const nextReward = rewards.find((r) => r.visit > visits);
   const rewardVisits = new Set(rewards.map((r) => r.visit));
   const titles = db.titles;
@@ -447,7 +469,7 @@ export default function App() {
               )}
             </>
           )}
-          {r < GRID_ROWS - 1 && (
+          {r < gridRows - 1 && (
             <>
               <div
                 className="absolute bottom-0 top-1/2 w-1 rounded-full bg-surface-deep"
@@ -544,6 +566,17 @@ export default function App() {
         .animate-shake-x { animation: shakeX 0.5s ease-in-out both; }
         .animate-reveal-pulse { animation: revealPulse 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
         .animate-stamp-in { animation: stampIn 0.5s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
+        @keyframes popIn {
+          0% { transform: scale(0.6); opacity: 0; }
+          70% { transform: scale(1.05); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes confettiFall {
+          0% { transform: translateY(-12vh) rotate(0deg); opacity: 1; }
+          85% { opacity: 1; }
+          100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+        }
+        .animate-pop-in { animation: popIn 0.5s cubic-bezier(0.2, 0.9, 0.25, 1) both; }
       `}</style>
 
       {currentUser === null ? (
@@ -661,7 +694,7 @@ export default function App() {
               <div className="mt-1 flex items-baseline gap-2">
                 <span className="font-display text-7xl font-extrabold tabular-nums">{visits}</span>
                 <span className="font-display text-2xl font-bold text-muted-foreground">
-                  / {MAX_VISITS}
+                  / {cardSize}
                 </span>
               </div>
               <div className="mt-3 inline-flex rounded-full bg-accent px-4 py-1.5">
@@ -681,34 +714,7 @@ export default function App() {
               </p>
             </section>
 
-            {/* Bandeau récompense (après fermeture du volet) */}
-            {rewardBanner && (
-              <div className="animate-fade-in-up mt-4 rounded-[2rem] bg-accent p-5 text-accent-foreground">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-70">
-                      Récompense débloquée
-                    </p>
-                    <p className="mt-1.5 font-display text-2xl font-extrabold leading-tight">
-                      {rewardBanner.label}
-                    </p>
-                    <p className="mt-1 text-xs font-medium opacity-80">
-                      {rewardBanner.detail} — montrez cet écran au comptoir.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setRewardBanner(null)}
-                    aria-label="Fermer"
-                    className="shrink-0 rounded-full p-1.5 transition-colors duration-150 hover:bg-accent-foreground/10"
-                  >
-                    <X size={18} strokeWidth={2.5} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Grille des 50 tampons, repliable */}
+            {/* Grille des tampons, repliable */}
             <section className="mt-4">
               <button
                 type="button"
@@ -722,7 +728,7 @@ export default function App() {
                   </span>
                   <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                     {gridOpen ? "Appuyez pour replier" : "Appuyez pour dérouler"} · {visits}/
-                    {MAX_VISITS}
+                    {cardSize}
                   </span>
                 </span>
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
@@ -739,7 +745,7 @@ export default function App() {
 
               {gridOpen && (
                 <div className="animate-fade-in mt-4 rounded-[2rem] bg-surface p-4">
-                  {Array.from({ length: GRID_ROWS }, (_, r) => renderRow(r))}
+                  {Array.from({ length: gridRows }, (_, r) => renderRow(r))}
                 </div>
               )}
             </section>
@@ -1313,6 +1319,67 @@ export default function App() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ============================== CÉLÉBRATION RÉCOMPENSE ============================== */}
+      {rewardBanner && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-5">
+          <div
+            className="animate-fade-in absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setRewardBanner(null)}
+          />
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            {confettiPieces.map((p) => (
+              <span
+                key={p.id}
+                className="absolute top-0 block"
+                style={{
+                  left: `${p.left}%`,
+                  width: p.size,
+                  height: p.round ? p.size : p.size * 1.6,
+                  backgroundColor: p.color,
+                  borderRadius: p.round ? "50%" : "2px",
+                  transform: `rotate(${p.rotate}deg)`,
+                  animation: `confettiFall ${p.duration}s ${p.delay}s ease-in infinite`,
+                }}
+              />
+            ))}
+          </div>
+          <div className="animate-pop-in relative w-full max-w-sm rounded-[2rem] bg-surface p-8 text-center ring-4 ring-accent">
+            <button
+              type="button"
+              onClick={() => setRewardBanner(null)}
+              aria-label="Fermer"
+              className="absolute right-4 top-4 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-raised hover:text-foreground"
+            >
+              <X size={18} strokeWidth={2.5} />
+            </button>
+            <span
+              aria-hidden="true"
+              className="stamp-cream animate-stamp-in mx-auto block h-20 w-20"
+              style={{ "--stamp-url": `url(${IMG_STAMP})`, "--rot": "0deg" }}
+            />
+            <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              Récompense débloquée !
+            </p>
+            <p className="mt-2 font-display text-3xl font-extrabold leading-tight">
+              {rewardBanner.label}
+            </p>
+            <div className="mt-3 inline-flex rounded-full bg-accent px-4 py-1.5">
+              <span className="text-xs font-bold text-accent-foreground">{rewardBanner.detail}</span>
+            </div>
+            <p className="mt-4 text-sm text-muted-foreground">
+              Montrez cet écran au comptoir pour en profiter.
+            </p>
+            <button
+              type="button"
+              onClick={() => setRewardBanner(null)}
+              className="mt-6 h-14 w-full rounded-full bg-accent font-display text-lg font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97]"
+            >
+              Génial !
+            </button>
           </div>
         </div>
       )}
