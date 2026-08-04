@@ -6,7 +6,7 @@ export const MAX_VISITS = 50;
 export const ADMIN_PASS = "0000"; // ponytail: stocké en local pour l'instant — Supabase ensuite
 
 // Chemins d'assets valables en dev comme sur GitHub Pages ("/Thefirst/")
-export const IMG_STAMP = `${import.meta.env.BASE_URL}images/stamp.svg`;
+export const IMG_STAMP = `${import.meta.env.BASE_URL}images/stamp.png`;
 export const IMG_LOGO = `${import.meta.env.BASE_URL}images/logo-cream.png`;
 export const IMG_LOGO_MAUVE = `${import.meta.env.BASE_URL}images/logo-mauve.png`;
 export const BASE = import.meta.env.BASE_URL;

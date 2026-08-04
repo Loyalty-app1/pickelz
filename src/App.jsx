@@ -368,14 +368,15 @@ export default function App() {
             {String(visitNumber).padStart(2, "0")}
           </span>
           {completed && (
-            <img
-              src={IMG_STAMP}
-              alt={`Tampon visite ${visitNumber}`}
+            <span
+              role="img"
+              aria-label={`Tampon visite ${visitNumber}`}
               className={[
-                "h-[86%] w-[86%] object-contain drop-shadow-sm",
+                "stamp-cream h-[92%] w-[92%]",
                 visitNumber === justStamped ? "animate-stamp-in" : "",
               ].join(" ")}
               style={{
+                "--stamp-url": `url(${IMG_STAMP})`,
                 "--rot": `${STAMP_ROTATIONS[(visitNumber - 1) % STAMP_ROTATIONS.length]}deg`,
                 transform:
                   visitNumber === justStamped
@@ -555,9 +556,8 @@ export default function App() {
               className="mx-auto w-64 max-w-full"
             />
 
-            <h1 className="mt-12 text-center font-display text-5xl font-extrabold">
-              Chaque burger
-              <span className="block">compte.</span>
+            <h1 className="mt-8 text-center font-display text-3xl font-extrabold text-white">
+              Love from the first bite <span aria-hidden="true">♥</span>
             </h1>
 
             <form onSubmit={handleLogin} className="mt-12">
@@ -628,7 +628,11 @@ export default function App() {
                 className="group flex min-w-0 items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98]"
                 title="Modifier mes infos"
               >
-                <img src={IMG_STAMP} alt="" className="h-11 w-11 shrink-0" />
+                <span
+                  aria-hidden="true"
+                  className="stamp-cream h-11 w-11 shrink-0"
+                  style={{ "--stamp-url": `url(${IMG_STAMP})` }}
+                />
                 <div className="min-w-0">
                   <p className="truncate font-display text-lg font-bold leading-tight">
                     {currentUser.nickname || currentUser.name}

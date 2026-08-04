@@ -309,7 +309,11 @@ function AdminGate({ children }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-6 font-sans text-foreground">
       <style>{ADMIN_STYLES}</style>
       <form onSubmit={submit} className={["w-full max-w-xs", shake ? "animate-shake-x" : ""].join(" ")}>
-        <img src={IMG_STAMP} alt="" className="mx-auto h-20 w-20" />
+        <span
+          aria-hidden="true"
+          className="stamp-cream mx-auto block h-20 w-20"
+          style={{ "--stamp-url": `url(${IMG_STAMP})` }}
+        />
         <h1 className="mt-6 text-center font-display text-3xl font-extrabold">Espace équipe</h1>
         <p className="mt-1 text-center text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
           Mot de passe requis
