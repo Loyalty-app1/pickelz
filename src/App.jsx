@@ -590,7 +590,7 @@ export default function App() {
             />
 
             <h1 className="mt-8 text-center font-display text-3xl font-extrabold text-white">
-              Love from the first bite <span aria-hidden="true">♥</span>
+              Love at the first bite <span aria-hidden="true">♥</span>
             </h1>
 
             <form onSubmit={handleLogin} className="mt-12">
