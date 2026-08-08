@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase.js";
-import { fetchConfig, DEFAULT_TITLES, DEFAULT_CARD_SIZE } from "./store.js";
+import { fetchConfig, DEFAULT_CARD_SIZE } from "./store.js";
 
-// Config non sensible (récompenses / titres / taille de carte) : lisible par anon
-// et diffusée en temps réel. Les données clients ne transitent plus par ici —
+// Config non sensible (récompenses / taille de carte) : lisible par anon et
+// diffusée en temps réel. Les données clients ne transitent plus par ici —
 // elles passent par les RPC (login/admin). D'où un hook "config only".
-const CONFIG_TABLES = ["rewards", "titles", "settings"];
+const CONFIG_TABLES = ["rewards", "settings"];
 
 export function useConfig() {
   const [config, setConfig] = useState({
     rewards: [],
-    titles: DEFAULT_TITLES,
     cardSize: DEFAULT_CARD_SIZE,
     loading: true,
     error: null,

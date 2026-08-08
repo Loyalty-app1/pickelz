@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { getLocalTimeZone } from "@internationalized/date";
 import DateRange from "./DateRange.jsx";
+import Footer from "./Footer.jsx";
 import { useConfig } from "./useLiveDB.js";
 import {
   MAX_CARD_SIZE,
@@ -17,13 +18,12 @@ import {
   adminSetCardSize,
   adminUpsertReward,
   adminDeleteReward,
-  adminSaveTitles,
   adminAddServer,
   adminRemoveServer,
   adminSetPin,
+  adminRecentOrders,
   monthVisits,
   activeRewards,
-  getTitle,
   formatDateFR,
   isSameMonth,
 } from "./store.js";
@@ -364,16 +364,15 @@ function AdminGate({ children }) {
 function AdminShell({ active, children }) {
   const nav = [
     { key: "dash", label: "Tableau de bord", href: `${BASE}admin` },
+    { key: "orders", label: "Commandes du jour", href: `${BASE}admin/commandes` },
     { key: "rewards", label: "Récompenses", href: `${BASE}admin/recompenses` },
-    { key: "titles", label: "Titres", href: `${BASE}admin/titres` },
-    { key: "wheel", label: "Roue du mois", href: `${BASE}roulette` },
     { key: "app", label: "App cliente", href: BASE },
   ];
   return (
     <AdminGate>
       <div className="min-h-screen bg-background font-sans text-foreground antialiased">
         <style>{ADMIN_STYLES}</style>
-        <div className="mx-auto w-full max-w-5xl px-8 py-10">
+        <div className="mx-auto w-full max-w-5xl px-8 pb-16 pt-10">
           <header className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <img src={IMG_LOGO} alt={`Pickel'z — ${TAGLINE}`} className="w-32" />
@@ -400,6 +399,7 @@ function AdminShell({ active, children }) {
           </header>
           {children}
         </div>
+        <Footer />
       </div>
     </AdminGate>
   );
@@ -409,7 +409,7 @@ function AdminShell({ active, children }) {
 
 export function AdminDashboard() {
   // Snapshot complet (PII incluse) via RPC protégée par PIN, rafraîchi périodiquement.
-  const [db, setDb] = useState({ users: [], rewards: [], titles: [], cardSize: 50, servers: [] });
+  const [db, setDb] = useState({ users: [], rewards: [], cardSize: 50, servers: [] });
   const [range, setRange] = useState(null); // {start, end} CalendarDate ou null = tout
   const [proofFilter, setProofFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -505,11 +505,6 @@ export function AdminDashboard() {
       });
     }
 
-    const byTitle = db.titles.map((t) => ({
-      label: t.label.split(" ")[0],
-      value: users.filter((u) => getTitle(db.titles, monthVisits(u, cardSize)) === t.label).length,
-    }));
-
     const rewardBars = rewards.map((r) => ({
       key: r.id,
       visit: r.visit,
@@ -532,10 +527,9 @@ export function AdminDashboard() {
       instagram,
       google,
       months,
-      byTitle,
       rewardBars,
     };
-  }, [users, rewards, db.titles, inRange, proofFilter, cardSize]);
+  }, [users, rewards, inRange, proofFilter, cardSize]);
 
   const visibleUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -624,6 +618,100 @@ export function AdminDashboard() {
 
   return (
     <AdminShell active="dash">
+      {/* Équipe & accès — première section */}
+      <section className="animate-fade-in-up mt-8">
+        <h2 className="mb-3 font-display text-2xl font-extrabold">Équipe & accès</h2>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <GlowCard>
+              <p className="font-display text-lg font-bold">Codes équipe</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Un code par serveur, renouvelé automatiquement chaque jour à 8h. C'est ce code que
+                le serveur saisit pour valider une visite.
+              </p>
+              <div className="mt-4 space-y-2">
+                {db.servers.length === 0 ? (
+                  <p className="rounded-2xl bg-surface-deep px-4 py-6 text-center text-sm text-muted-foreground">
+                    Aucun serveur pour l'instant.
+                  </p>
+                ) : (
+                  db.servers.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl bg-surface-deep px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-display text-base font-bold">{s.name}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                          Code du jour
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-display text-2xl font-extrabold tabular-nums tracking-[0.25em] text-accent">
+                          {s.code}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveServer(s.id, s.name)}
+                          disabled={serverBusy}
+                          aria-label={`Retirer ${s.name}`}
+                          className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-raised hover:text-foreground disabled:opacity-40"
+                        >
+                          <Trash2 size={16} strokeWidth={2} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <form onSubmit={handleAddServer} className="mt-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newServerName}
+                  onChange={(e) => setNewServerName(e.target.value)}
+                  placeholder="Nom du serveur"
+                  className="h-11 min-w-0 flex-1 rounded-full border-2 border-transparent bg-surface-deep px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
+                />
+                <button
+                  type="submit"
+                  disabled={serverBusy || newServerName.trim().length < 1}
+                  className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-4 font-display text-sm font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97] disabled:opacity-40"
+                >
+                  <Plus size={16} strokeWidth={2.5} />
+                  Ajouter
+                </button>
+              </form>
+            </GlowCard>
+          </div>
+          <div className="lg:col-span-5">
+            <GlowCard className="h-full">
+              <div className="flex h-full flex-col">
+                <p className="font-display text-lg font-bold">Code admin</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Le code d'accès à cet espace. Choisissez-en un solide, différent des codes serveur.
+                </p>
+                <form onSubmit={handleChangePin} className="mt-4 flex flex-1 flex-col">
+                  <input
+                    type="password"
+                    value={newPin}
+                    onChange={(e) => {
+                      setNewPin(e.target.value);
+                      setPinMsg("");
+                    }}
+                    placeholder="Nouveau code admin"
+                    className="h-11 w-full rounded-full border-2 border-transparent bg-surface-deep px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
+                  />
+                  {pinMsg && <p className="animate-fade-in mt-2 text-sm font-medium">{pinMsg}</p>}
+                  <button type="submit" className={`${BTN} mt-auto w-full`}>
+                    Changer le code
+                  </button>
+                </form>
+              </div>
+            </GlowCard>
+          </div>
+        </div>
+      </section>
+
       {/* Filtres */}
       <section className="animate-fade-in-up mt-8 flex flex-wrap items-center gap-3">
         <DateRange value={range} onChange={setRange} />
@@ -709,7 +797,7 @@ export function AdminDashboard() {
           value={stats.avgReturnDays === null ? "—" : `${stats.avgReturnDays} j`}
           hint="Délai moyen entre deux visites"
         />
-        <StatTile label="Tirage du mois" value={stats.participants} hint="Participants à la roue en cours" />
+        <StatTile label="Actifs ce mois" value={stats.participants} hint="Clients avec au moins une visite ce mois-ci" />
       </section>
 
       {/* Graphiques */}
@@ -733,112 +821,13 @@ export function AdminDashboard() {
         </div>
       </section>
 
-      <section className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-12">
-        <div className="lg:col-span-5">
-          <ChartCard title="Clients par titre" subtitle="Selon le parcours du mois en cours">
-            <Bars data={stats.byTitle} height={210} />
-          </ChartCard>
-        </div>
-        <div className="lg:col-span-7">
-          <ChartCard
-            title="Récompenses débloquées"
-            subtitle="Nombre de clients ayant atteint chaque palier ce mois-ci"
-          >
-            <HBars data={stats.rewardBars} />
-          </ChartCard>
-        </div>
-      </section>
-
-      {/* Équipe & accès */}
-      <section className="mt-10">
-        <h2 className="mb-3 font-display text-2xl font-extrabold">Équipe & accès</h2>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-          <div className="lg:col-span-7">
-            <GlowCard>
-              <p className="font-display text-lg font-bold">Codes équipe</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Un code par serveur, renouvelé automatiquement toutes les 24 h. C'est ce code que le
-                serveur saisit pour valider une visite.
-              </p>
-              <div className="mt-4 space-y-2">
-                {db.servers.length === 0 ? (
-                  <p className="rounded-2xl bg-surface-deep px-4 py-6 text-center text-sm text-muted-foreground">
-                    Aucun serveur pour l'instant.
-                  </p>
-                ) : (
-                  db.servers.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between gap-3 rounded-2xl bg-surface-deep px-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-display text-base font-bold">{s.name}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          Code du jour
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-display text-2xl font-extrabold tabular-nums tracking-[0.25em] text-accent">
-                          {s.code}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveServer(s.id, s.name)}
-                          disabled={serverBusy}
-                          aria-label={`Retirer ${s.name}`}
-                          className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-raised hover:text-foreground disabled:opacity-40"
-                        >
-                          <Trash2 size={16} strokeWidth={2} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <form onSubmit={handleAddServer} className="mt-3 flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newServerName}
-                  onChange={(e) => setNewServerName(e.target.value)}
-                  placeholder="Nom du serveur"
-                  className="h-11 min-w-0 flex-1 rounded-full border-2 border-transparent bg-surface-deep px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
-                />
-                <button
-                  type="submit"
-                  disabled={serverBusy || newServerName.trim().length < 1}
-                  className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-4 font-display text-sm font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97] disabled:opacity-40"
-                >
-                  <Plus size={16} strokeWidth={2.5} />
-                  Ajouter
-                </button>
-              </form>
-            </GlowCard>
-          </div>
-          <div className="lg:col-span-5">
-            <GlowCard className="h-full">
-              <p className="font-display text-lg font-bold">Code admin</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Le code d'accès à cet espace. Choisissez-en un solide, différent des codes serveur.
-              </p>
-              <form onSubmit={handleChangePin} className="mt-4 space-y-2">
-                <input
-                  type="password"
-                  value={newPin}
-                  onChange={(e) => {
-                    setNewPin(e.target.value);
-                    setPinMsg("");
-                  }}
-                  placeholder="Nouveau code admin"
-                  className="h-11 w-full rounded-full border-2 border-transparent bg-surface-deep px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
-                />
-                <button type="submit" className={`${BTN} w-full`}>
-                  Changer le code
-                </button>
-              </form>
-              {pinMsg && <p className="animate-fade-in mt-2 text-sm font-medium">{pinMsg}</p>}
-            </GlowCard>
-          </div>
-        </div>
+      <section className="mt-3">
+        <ChartCard
+          title="Récompenses débloquées"
+          subtitle="Nombre de clients ayant atteint chaque palier ce mois-ci"
+        >
+          <HBars data={stats.rewardBars} />
+        </ChartCard>
       </section>
 
       {/* Clients */}
@@ -866,7 +855,6 @@ export function AdminDashboard() {
                 <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
                   <th className="px-5 py-4 font-bold">Nom</th>
                   <th className="px-5 py-4 font-bold">Surnom</th>
-                  <th className="px-5 py-4 font-bold">Titre</th>
                   <th className="px-5 py-4 text-right font-bold">Mois</th>
                   <th className="px-5 py-4 text-right font-bold">Total</th>
                   <th className="px-5 py-4 font-bold">Instagram</th>
@@ -884,9 +872,6 @@ export function AdminDashboard() {
                     >
                       <td className="px-5 py-3.5 font-semibold">{u.name}</td>
                       <td className="px-5 py-3.5 text-muted-foreground">{u.nickname || "—"}</td>
-                      <td className="px-5 py-3.5 text-muted-foreground">
-                        {getTitle(db.titles, monthVisits(u, cardSize))}
-                      </td>
                       <td className="px-5 py-3.5 text-right font-bold tabular-nums">
                         {monthVisits(u, cardSize)}
                       </td>
@@ -940,7 +925,6 @@ export function AdminDashboard() {
               {[
                 ["Téléphone", selectedUser.phone],
                 ["Instagram", selectedUser.instagram ? `@${selectedUser.instagram}` : "—"],
-                ["Titre", getTitle(db.titles, monthVisits(selectedUser, cardSize))],
                 ["Parcours du mois", `${monthVisits(selectedUser, cardSize)} / ${cardSize}`],
                 ["Visites totales", String(selectedUser.history.length)],
                 ["Offres promos", selectedUser.promoOptIn ? "Acceptées" : "Refusées"],
@@ -1338,150 +1322,163 @@ export function AdminRewardsPage() {
   );
 }
 
-/* ============================== TITRES (EN CASCADE) ============================== */
+/* ============================== COMMANDES DU JOUR ============================== */
 
-export function AdminTitlesPage() {
-  const { config, refresh } = useConfig();
-  const db = config; // {rewards, titles, cardSize}
-  const [draft, setDraft] = useState(null);
-  const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+export function AdminOrdersPage() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [proofFilter, setProofFilter] = useState("all");
+  const [serverFilter, setServerFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
-  // Amorce le brouillon une fois les titres chargés depuis Supabase.
-  useEffect(() => {
-    if (draft === null && !config.loading) {
-      setDraft([...db.titles].sort((a, b) => a.min - b.min));
-    }
-  }, [config.loading, db.titles, draft]);
-
-  function setRow(i, field, value) {
-    setDraft((prev) => (prev || []).map((t, idx) => (idx === i ? { ...t, [field]: value } : t)));
-    setError("");
-    setSaved(false);
-  }
-
-  function addRow() {
-    setDraft((prev) => {
-      const list = prev || [];
-      const lastMin = list.length > 0 ? Number(list[list.length - 1].min) : 0;
-      return [...list, { min: lastMin + 10, label: "" }];
-    });
-    setSaved(false);
-  }
-
-  function removeRow(i) {
-    setDraft((prev) => (prev || []).filter((_, idx) => idx !== i));
-    setError("");
-    setSaved(false);
-  }
-
-  async function handleSave() {
-    if (!draft || draft.length === 0) {
-      setError("Il faut au moins un titre.");
-      return;
-    }
-    const rows = draft.map((t) => ({ min: Number(t.min), label: t.label.trim() }));
-    if (rows[0].min !== 0) {
-      setError("Le premier palier doit commencer à 0 visite.");
-      return;
-    }
-    for (let i = 0; i < rows.length; i++) {
-      if (!Number.isInteger(rows[i].min) || rows[i].min < 0 || rows[i].min > db.cardSize) {
-        setError(`Palier n°${i + 1} : le seuil doit être entre 0 et ${db.cardSize} (taille de la carte).`);
-        return;
-      }
-      if (rows[i].label.length < 2) {
-        setError(`Palier n°${i + 1} : le titre est obligatoire.`);
-        return;
-      }
-      if (i > 0 && rows[i].min <= rows[i - 1].min) {
-        setError(
-          `La cascade doit monter : le palier n°${i + 1} doit dépasser ${rows[i - 1].min} visites.`
-        );
-        return;
-      }
-    }
+  const refresh = useCallback(async () => {
     try {
-      await adminSaveTitles(adminPin(), rows);
-      refresh();
-      setError("");
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      const rows = await adminRecentOrders(adminPin());
+      setOrders(Array.isArray(rows) ? rows : []);
     } catch (err) {
-      setError("Enregistrement échoué — réessayez.");
+      /* on garde l'affichage courant */
+    } finally {
+      setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 15000); // pas de temps réel sur les tables PII
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const serverNames = useMemo(
+    () => [...new Set(orders.map((o) => o.serverName).filter(Boolean))].sort(),
+    [orders]
+  );
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return orders.filter((o) => {
+      if (proofFilter !== "all" && o.type !== proofFilter) return false;
+      if (serverFilter !== "all" && o.serverName !== serverFilter) return false;
+      if (!q) return true;
+      return (
+        (o.customer || "").toLowerCase().includes(q) ||
+        (o.nickname || "").toLowerCase().includes(q) ||
+        (o.code || "").toLowerCase().includes(q) ||
+        (o.serverCode || "").toLowerCase().includes(q)
+      );
+    });
+  }, [orders, proofFilter, serverFilter, search]);
+
+  const fmt = (iso) =>
+    new Date(iso).toLocaleString("fr-FR", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
   return (
-    <AdminShell active="titles">
-      <section className="animate-fade-in-up mt-8 max-w-2xl">
-        <h2 className="font-display text-3xl font-extrabold">Titres des clients</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Les titres se débloquent en cascade au fil des visites du mois : chaque seuil doit être
-          plus haut que le précédent.
-        </p>
-
-        <div className="mt-6 space-y-2">
-          {(draft || []).map((t, i) => (
-            <div key={i} className="flex items-center gap-3" style={{ paddingLeft: `${i * 20}px` }}>
-              <div
-                className="h-1 w-4 shrink-0 rounded-full bg-accent"
-                style={{ opacity: i === 0 ? 0 : 1 }}
-              />
-              <input
-                type="number"
-                min="0"
-                max={db.cardSize}
-                value={t.min}
-                disabled={i === 0}
-                onChange={(e) => setRow(i, "min", e.target.value)}
-                className="h-12 w-24 rounded-2xl border-2 border-transparent bg-surface px-3 text-center text-sm font-bold tabular-nums text-foreground outline-none transition-colors duration-150 focus:border-foreground disabled:opacity-50"
-              />
-              <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                visites →
-              </span>
-              <input
-                type="text"
-                value={t.label}
-                placeholder="Nom du titre"
-                onChange={(e) => setRow(i, "label", e.target.value)}
-                className="h-12 min-w-0 flex-1 rounded-2xl border-2 border-transparent bg-surface px-4 font-display text-base font-bold text-foreground outline-none transition-colors duration-150 placeholder:font-sans placeholder:font-normal placeholder:text-muted-foreground/60 focus:border-foreground"
-              />
-              <button
-                type="button"
-                onClick={() => removeRow(i)}
-                disabled={i === 0 && draft.length === 1}
-                aria-label="Supprimer ce palier"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-surface text-muted-foreground transition-colors duration-150 hover:bg-raised hover:text-foreground disabled:opacity-30"
-              >
-                <Trash2 size={16} strokeWidth={2} />
-              </button>
-            </div>
-          ))}
+    <AdminShell active="orders">
+      <section className="animate-fade-in-up mt-8">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-display text-3xl font-extrabold">Commandes du jour</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Les visites validées sur les dernières 24 heures, avec le serveur qui les a validées.
+            </p>
+          </div>
+          <span className="rounded-full bg-surface px-4 py-1.5 text-sm font-bold text-muted-foreground">
+            {visible.length} commande{visible.length > 1 ? "s" : ""}
+          </span>
         </div>
 
+        {/* Filtres simples */}
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={addRow}
-            className="flex h-12 items-center gap-2 rounded-full border-2 border-foreground px-5 font-display text-base font-extrabold text-foreground transition-colors duration-150 hover:bg-foreground hover:text-accent-foreground active:scale-[0.97]"
+          <div className="flex h-11 items-center rounded-full bg-surface p-1">
+            {[
+              { v: "all", label: "Tout" },
+              { v: "instagram", label: "Instagram" },
+              { v: "google", label: "Google" },
+            ].map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                onClick={() => setProofFilter(o.v)}
+                className={[
+                  "h-full rounded-full px-4 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-150",
+                  proofFilter === o.v
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                ].join(" ")}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={serverFilter}
+            onChange={(e) => setServerFilter(e.target.value)}
+            className="h-11 rounded-full border-2 border-transparent bg-surface px-4 text-sm text-foreground outline-none transition-colors duration-150 focus:border-foreground"
           >
-            <Plus size={17} strokeWidth={2.5} />
-            Ajouter un palier
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className={
-              saved
-                ? "h-12 rounded-full bg-surface px-8 font-display text-base font-extrabold text-foreground"
-                : `${BTN} px-8`
-            }
-          >
-            {saved ? "Enregistré !" : "Enregistrer la cascade"}
-          </button>
+            <option value="all">Tous les serveurs</option>
+            {serverNames.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher client, code…"
+            className="h-11 w-64 rounded-full border-2 border-transparent bg-surface px-5 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
+          />
         </div>
-        {error && <p className="animate-fade-in mt-3 text-sm font-medium">{error}</p>}
+
+        <div className="mt-4 overflow-x-auto rounded-3xl bg-surface">
+          {loading ? (
+            <div className="px-8 py-12 text-center text-sm text-muted-foreground">Chargement…</div>
+          ) : visible.length === 0 ? (
+            <div className="px-8 py-12 text-center text-sm text-muted-foreground">
+              {orders.length === 0
+                ? "Aucune commande sur les dernières 24 heures."
+                : "Aucun résultat pour ce filtre."}
+            </div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  <th className="px-5 py-4 font-bold">Quand</th>
+                  <th className="px-5 py-4 font-bold">Client</th>
+                  <th className="px-5 py-4 font-bold">Preuve</th>
+                  <th className="px-5 py-4 font-bold">Serveur</th>
+                  <th className="px-5 py-4 text-right font-bold">Code équipe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((o) => (
+                  <tr key={o.id} className="border-b border-border/30 last:border-b-0">
+                    <td className="px-5 py-3.5 text-muted-foreground">{fmt(o.date)}</td>
+                    <td className="px-5 py-3.5">
+                      <p className="font-semibold">{o.customer}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {o.nickname ? `« ${o.nickname} » · ` : ""}
+                        {o.code}
+                      </p>
+                    </td>
+                    <td className="px-5 py-3.5 text-muted-foreground">
+                      {o.type === "instagram" ? "Story Instagram" : "Avis Google"}
+                    </td>
+                    <td className="px-5 py-3.5 font-semibold">{o.serverName || "—"}</td>
+                    <td className="px-5 py-3.5 text-right font-display font-extrabold tabular-nums tracking-[0.15em] text-accent">
+                      {o.serverCode || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </section>
     </AdminShell>
   );

@@ -19,31 +19,20 @@ export function sanitizeCardSize(v) {
 }
 
 // Chemins d'assets (sous-chemin GitHub Pages /pickelz/)
-export const IMG_STAMP = `${import.meta.env.BASE_URL}images/stamp.png`;
-export const IMG_LOGO = `${import.meta.env.BASE_URL}images/logo-cream.png`;
-export const IMG_LOGO_MAUVE = `${import.meta.env.BASE_URL}images/logo-mauve.png`;
-export const BASE = import.meta.env.BASE_URL;
+const ENV_BASE = (import.meta.env && import.meta.env.BASE_URL) || "/";
+export const IMG_STAMP = `${ENV_BASE}images/stamp.png`;
+export const IMG_LOGO = `${ENV_BASE}images/logo-cream.png`;
+export const IMG_LOGO_MAUVE = `${ENV_BASE}images/logo-mauve.png`;
+export const BASE = ENV_BASE;
 
 export const BRAND = "Pickel'z";
 export const TAGLINE = "Burger and more !";
 export const INSTA_HANDLE = "@pickelz";
 
-export const DEFAULT_TITLES = [
-  { min: 0, label: "Petite Faim" },
-  { min: 10, label: "Habitué du Comptoir" },
-  { min: 20, label: "Grand Croqueur" },
-  { min: 35, label: "Maître du Burger" },
-  { min: 50, label: "Légende Pickel'z" },
-];
+export const DEV_CREDIT = "Aboulkacem";
+export const DEV_LINKEDIN = "https://www.linkedin.com/in/aboulkacem-ben-arab-567974241/";
 
 /* ============ Helpers purs ============ */
-
-export function getTitle(titles, visits) {
-  const sorted = [...titles].sort((a, b) => a.min - b.min);
-  let current = sorted[0] ? sorted[0].label : "";
-  for (const t of sorted) if (visits >= t.min) current = t.label;
-  return current;
-}
 
 export function isRewardActive(reward, ref = new Date()) {
   const day = ref.toISOString().slice(0, 10);
@@ -61,8 +50,25 @@ export function isSameMonth(iso, ref = new Date()) {
   return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
 }
 
+// Début du cycle courant : la carte se remet à zéro chaque mois, à la date
+// anniversaire de la première visite du client (pas le 1er du mois calendaire).
+// ponytail: arithmétique de mois JS (setMonth) — le 31 déborde sur le mois suivant, acceptable ici.
+export function cycleStart(firstIso, ref = new Date()) {
+  const start = new Date(firstIso);
+  for (;;) {
+    const next = new Date(start);
+    next.setMonth(next.getMonth() + 1);
+    if (next > ref) return start;
+    start.setTime(next.getTime());
+  }
+}
+
 export function monthVisits(user, cardSize = DEFAULT_CARD_SIZE, ref = new Date()) {
-  return Math.min(user.history.filter((h) => isSameMonth(h.date, ref)).length, cardSize);
+  if (!user.history || user.history.length === 0) return 0;
+  const dates = user.history.map((h) => new Date(h.date)).sort((a, b) => a - b);
+  const start = cycleStart(dates[0], ref);
+  const count = dates.filter((d) => d >= start && d <= ref).length;
+  return Math.min(count, cardSize);
 }
 
 export function formatDateFR(iso) {
@@ -86,21 +92,15 @@ function mapReward(r) {
   };
 }
 
-function mapTitle(t) {
-  return { id: t.id, min: t.min_visits, label: t.label };
-}
-
 export async function fetchConfig() {
-  const [rRes, tRes, sRes] = await Promise.all([
+  const [rRes, sRes] = await Promise.all([
     supabase.from("rewards").select("*"),
-    supabase.from("titles").select("*"),
     supabase.from("settings").select("card_size").eq("id", true).maybeSingle(),
   ]);
-  const err = rRes.error || tRes.error || sRes.error;
+  const err = rRes.error || sRes.error;
   if (err) throw err;
   return {
     rewards: (rRes.data || []).map(mapReward).sort((a, b) => a.visit - b.visit),
-    titles: (tRes.data || []).map(mapTitle).sort((a, b) => a.min - b.min),
     cardSize: sanitizeCardSize(sRes.data ? sRes.data.card_size : DEFAULT_CARD_SIZE),
   };
 }
@@ -149,10 +149,6 @@ export async function updateCustomer(code, patch) {
   );
 }
 
-export async function monthParticipants() {
-  return unwrap(await supabase.rpc("month_participants")) || [];
-}
-
 /* ============ RPC admin (PIN vérifié en base) ============ */
 
 // Renvoie le snapshot complet (users+config) si le PIN est bon, sinon null.
@@ -181,13 +177,9 @@ export async function adminDeleteReward(pin, id) {
   return unwrap(await supabase.rpc("admin_delete_reward", { p_pin: pin, p_id: id }));
 }
 
-export async function adminSaveTitles(pin, rows) {
-  return unwrap(
-    await supabase.rpc("admin_save_titles", {
-      p_pin: pin,
-      p_titles: rows.map((r) => ({ min: Number(r.min), label: r.label })),
-    })
-  );
+// Commandes validées sur les dernières 24 h (nom serveur figé à la validation).
+export async function adminRecentOrders(pin) {
+  return unwrap(await supabase.rpc("admin_recent_orders", { p_pin: pin })) || [];
 }
 
 export async function adminSetCardSize(pin, n) {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, ArrowRight, ChevronDown } from "lucide-react";
 import { useConfig } from "./useLiveDB.js";
+import Footer from "./Footer.jsx";
 import {
   IMG_STAMP,
   IMG_LOGO,
@@ -8,7 +9,6 @@ import {
   INSTA_HANDLE,
   monthVisits,
   activeRewards,
-  getTitle,
   formatDateFR,
   loginCustomer,
   createCustomer,
@@ -86,9 +86,6 @@ export default function App() {
   const [signupPromo, setSignupPromo] = useState(true);
   const [signupError, setSignupError] = useState("");
   const [signupBusy, setSignupBusy] = useState(false);
-  const [createdUser, setCreatedUser] = useState(null);
-  const [codeRevealed, setCodeRevealed] = useState(false);
-  const [codeCopied, setCodeCopied] = useState(false);
 
   // Édition du profil
   const [profileOpen, setProfileOpen] = useState(false);
@@ -122,7 +119,6 @@ export default function App() {
   }, [pin, visitStep, visitOpen]);
 
   const cardSize = config.cardSize;
-  const titles = config.titles;
   const gridRows = Math.ceil(cardSize / GRID_COLS);
   // Seules les récompenses atteignables sur la carte actuelle
   const rewards = useMemo(
@@ -199,9 +195,9 @@ export default function App() {
         promoOptIn: signupPromo,
         code,
       });
-      // Création = connexion immédiate ; puis révélation du code
+      // Création = connexion immédiate ; on ouvre directement le compte.
       setSession(newUser);
-      setCreatedUser(newUser);
+      closeSignup();
     } catch (err) {
       if (err && err.message === "code_taken") {
         setSignupError("Ce code est déjà pris — choisissez-en un autre.");
@@ -215,36 +211,6 @@ export default function App() {
     }
   }
 
-  function handleCopyCode() {
-    const code = createdUser ? createdUser.id : "";
-    if (!code) return;
-    const markCopied = () => {
-      setCodeCopied(true);
-      setTimeout(() => setCodeCopied(false), 2000);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(markCopied, () => fallbackCopy(code, markCopied));
-    } else {
-      fallbackCopy(code, markCopied);
-    }
-  }
-
-  function fallbackCopy(text, onDone) {
-    const el = document.createElement("textarea");
-    el.value = text;
-    el.setAttribute("readonly", "");
-    el.style.position = "fixed";
-    el.style.opacity = "0";
-    document.body.appendChild(el);
-    el.select();
-    try {
-      document.execCommand("copy");
-    } finally {
-      document.body.removeChild(el);
-    }
-    onDone();
-  }
-
   function closeSignup() {
     setSignupOpen(false);
     setSignupName("");
@@ -254,9 +220,6 @@ export default function App() {
     setSignupCode("");
     setSignupPromo(true);
     setSignupError("");
-    setCreatedUser(null);
-    setCodeRevealed(false);
-    setCodeCopied(false);
   }
 
   function openProfile() {
@@ -613,7 +576,7 @@ export default function App() {
 
       {currentUser === null ? (
         /* ============================== ACCUEIL ============================== */
-        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between px-6 py-12">
+        <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-between px-6 pb-16 pt-12">
           <div className="flex flex-1 flex-col justify-center">
             <img
               src={IMG_LOGO}
@@ -635,8 +598,8 @@ export default function App() {
                   type="text"
                   inputMode="text"
                   autoComplete="off"
-                  maxLength={10}
-                  placeholder="AB-000000"
+                  maxLength={20}
+                  placeholder="entrer le code ici"
                   value={loginCode}
                   onChange={(e) => {
                     setLoginCode(e.target.value.toUpperCase());
@@ -676,7 +639,7 @@ export default function App() {
         </div>
       ) : (
         /* ============================== PARCOURS ============================== */
-        <div className="mx-auto w-full max-w-md pb-44">
+        <div className="mx-auto w-full max-w-md pb-52">
           <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl">
             <div className="flex h-[76px] items-center justify-between gap-3 px-6">
               <button
@@ -721,11 +684,6 @@ export default function App() {
                   / {cardSize}
                 </span>
               </div>
-              <div className="mt-3 inline-flex rounded-full bg-accent px-4 py-1.5">
-                <span className="font-display text-base font-extrabold text-accent-foreground">
-                  {getTitle(titles, visits)}
-                </span>
-              </div>
               <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                 {journeyComplete
                   ? "Parcours du mois terminé — montrez cet écran au comptoir !"
@@ -734,7 +692,7 @@ export default function App() {
                     : "Continuez, ça sent bon."}
               </p>
               <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-                Le parcours repart à zéro le 1er de chaque mois
+                Votre carte se remet à zéro chaque mois, à la date de votre première visite
               </p>
             </section>
 
@@ -854,7 +812,7 @@ export default function App() {
           </main>
 
           {/* Action principale */}
-          <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md bg-gradient-to-t from-background via-background/95 to-transparent px-6 pb-6 pt-10">
+          <div className="fixed inset-x-0 bottom-8 z-30 mx-auto w-full max-w-md bg-gradient-to-t from-background via-background/95 to-transparent px-6 pb-6 pt-10">
             {journeyComplete ? (
               <div className="flex h-14 items-center justify-center rounded-full border-2 border-foreground px-5 text-center font-display text-base font-extrabold">
                 Parcours terminé — bravo !
@@ -869,208 +827,152 @@ export default function App() {
       )}
 
       {/* ============================== CRÉATION DE CARTE ============================== */}
-      {(signupOpen || createdUser) && (
+      {signupOpen && (
         <div className="fixed inset-0 z-40 flex items-center justify-center p-5">
           <div
             className="animate-fade-in absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={createdUser ? undefined : closeSignup}
+            onClick={closeSignup}
           />
           <div className="animate-fade-in-up relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-[2rem] bg-background p-6 ring-2 ring-border">
-            {!createdUser ? (
-              <>
-                <div className="mb-6 flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="font-display text-3xl font-extrabold leading-tight">
-                      Bienvenue au club.
-                    </h2>
-                    <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                      Quelques infos et votre carte est prête.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={closeSignup}
-                    aria-label="Fermer"
-                    className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-surface hover:text-foreground"
-                  >
-                    <X size={18} strokeWidth={2.5} />
-                  </button>
-                </div>
-
-                <form onSubmit={handleCreateCard} className="space-y-4">
-                  <div>
-                    <label htmlFor="signup-name" className={labelClass}>
-                      Votre nom
-                    </label>
-                    <input
-                      id="signup-name"
-                      type="text"
-                      autoComplete="name"
-                      placeholder="Marie Dupont"
-                      value={signupName}
-                      onChange={(e) => {
-                        setSignupName(e.target.value);
-                        setSignupError("");
-                      }}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="signup-nickname" className={labelClass}>
-                      Votre surnom
-                    </label>
-                    <input
-                      id="signup-nickname"
-                      type="text"
-                      autoComplete="off"
-                      placeholder="Riri"
-                      value={signupNickname}
-                      onChange={(e) => {
-                        setSignupNickname(e.target.value);
-                        setSignupError("");
-                      }}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="signup-phone" className={labelClass}>
-                      Votre téléphone
-                    </label>
-                    <input
-                      id="signup-phone"
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      placeholder="+216 20 123 456"
-                      value={signupPhone}
-                      onChange={(e) => {
-                        setSignupPhone(e.target.value);
-                        setSignupError("");
-                      }}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="signup-instagram" className={labelClass}>
-                      Votre Instagram{" "}
-                      <span className="normal-case tracking-normal opacity-70">(optionnel)</span>
-                    </label>
-                    <input
-                      id="signup-instagram"
-                      type="text"
-                      autoComplete="off"
-                      placeholder="@votrepseudo"
-                      value={signupInsta}
-                      onChange={(e) => setSignupInsta(e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="signup-code" className={labelClass}>
-                      Choisissez votre code
-                    </label>
-                    <input
-                      id="signup-code"
-                      type="text"
-                      autoComplete="off"
-                      inputMode="text"
-                      maxLength={20}
-                      placeholder="MONCODE"
-                      value={signupCode}
-                      onChange={(e) => {
-                        setSignupCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""));
-                        setSignupError("");
-                      }}
-                      className={`${inputClass} font-semibold tracking-[0.12em]`}
-                    />
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-                      C'est votre clé pour retrouver vos tampons. 4 à 20 caractères — à garder
-                      confidentiel.
-                    </p>
-                  </div>
-                  <label
-                    className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface p-4"
-                    htmlFor="signup-promo"
-                  >
-                    <input
-                      id="signup-promo"
-                      type="checkbox"
-                      checked={signupPromo}
-                      onChange={(e) => setSignupPromo(e.target.checked)}
-                      className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer appearance-none rounded-md bg-surface-deep ring-2 ring-border transition-colors duration-150 checked:bg-accent checked:ring-accent"
-                    />
-                    <span className="text-xs leading-relaxed text-muted-foreground">
-                      Je veux recevoir les offres exclusives et les bons plans Pickel'z.
-                    </span>
-                  </label>
-                  {signupError && (
-                    <p className="animate-fade-in text-sm font-medium">{signupError}</p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={signupBusy}
-                    className={`${btnPrimary} disabled:opacity-60`}
-                  >
-                    {signupBusy ? "Création…" : "Créer ma carte"}
-                  </button>
-                </form>
-              </>
-            ) : (
-              <div className="text-center">
-                <img src={IMG_LOGO} alt="Pickel'z" className="mx-auto w-40" />
-                <h2 className="mt-6 font-display text-3xl font-extrabold leading-tight">
-                  Bienvenue, {createdUser.nickname || createdUser.name.split(" ")[0]} !
+            <div className="mb-6 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-display text-3xl font-extrabold leading-tight">
+                  Bienvenue au club.
                 </h2>
-                <p className="mx-auto mt-2 max-w-[290px] text-sm leading-relaxed text-muted-foreground">
-                  Voici votre code personnel : c'est votre clé pour retrouver vos tampons sur
-                  n'importe quel téléphone.
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                  Quelques infos et votre carte est prête.
                 </p>
-
-                <div
-                  className={[
-                    "mx-auto mt-6 w-fit select-none rounded-2xl px-8 py-4 font-display text-4xl font-extrabold tracking-[0.1em] transition-all duration-700",
-                    codeRevealed
-                      ? "animate-reveal-pulse bg-accent text-accent-foreground blur-0"
-                      : "bg-surface text-foreground blur-md",
-                  ].join(" ")}
-                >
-                  {createdUser.id}
-                </div>
-
-                <p className="mx-auto mt-4 max-w-[290px] text-xs font-semibold leading-relaxed text-foreground">
-                  ⚠️ Gardez-le confidentiel et notez-le bien — il ne sera plus jamais réaffiché.
-                </p>
-
-                <div className="mt-6 space-y-3">
-                  {!codeRevealed ? (
-                    <button
-                      type="button"
-                      onClick={() => setCodeRevealed(true)}
-                      className={btnPrimary}
-                    >
-                      Révéler mon code
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleCopyCode}
-                        className={
-                          codeCopied
-                            ? "h-14 w-full rounded-full bg-surface font-display text-lg font-extrabold text-foreground"
-                            : btnGhost
-                        }
-                      >
-                        {codeCopied ? "Copié !" : "Copier le code"}
-                      </button>
-                      <button type="button" onClick={closeSignup} className={btnPrimary}>
-                        Voir mon parcours
-                      </button>
-                    </>
-                  )}
-                </div>
               </div>
-            )}
+              <button
+                type="button"
+                onClick={closeSignup}
+                aria-label="Fermer"
+                className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-surface hover:text-foreground"
+              >
+                <X size={18} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCard} className="space-y-4">
+              {/* Code choisi — champ mis en avant */}
+              <div className="rounded-3xl bg-accent/10 p-4 ring-2 ring-accent">
+                <label
+                  htmlFor="signup-code"
+                  className="mb-2 block font-display text-base font-extrabold text-foreground"
+                >
+                  Choisissez votre code
+                </label>
+                <input
+                  id="signup-code"
+                  type="text"
+                  autoComplete="off"
+                  inputMode="text"
+                  maxLength={20}
+                  autoFocus
+                  placeholder="MONCODE"
+                  value={signupCode}
+                  onChange={(e) => {
+                    setSignupCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""));
+                    setSignupError("");
+                  }}
+                  className="h-16 w-full rounded-2xl border-2 border-transparent bg-background px-4 text-center font-display text-2xl font-extrabold tracking-[0.25em] text-foreground outline-none transition-colors duration-200 placeholder:text-muted-foreground/40 focus:border-accent"
+                />
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  C'est votre clé pour retrouver vos tampons sur n'importe quel téléphone. 4 à 20
+                  caractères — à garder confidentiel.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="signup-name" className={labelClass}>
+                  Votre nom
+                </label>
+                <input
+                  id="signup-name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="Marie Dupont"
+                  value={signupName}
+                  onChange={(e) => {
+                    setSignupName(e.target.value);
+                    setSignupError("");
+                  }}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="signup-nickname" className={labelClass}>
+                  Votre surnom
+                </label>
+                <input
+                  id="signup-nickname"
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Riri"
+                  value={signupNickname}
+                  onChange={(e) => {
+                    setSignupNickname(e.target.value);
+                    setSignupError("");
+                  }}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="signup-phone" className={labelClass}>
+                  Votre téléphone
+                </label>
+                <input
+                  id="signup-phone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+216 20 123 456"
+                  value={signupPhone}
+                  onChange={(e) => {
+                    setSignupPhone(e.target.value);
+                    setSignupError("");
+                  }}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="signup-instagram" className={labelClass}>
+                  Votre Instagram{" "}
+                  <span className="normal-case tracking-normal opacity-70">(optionnel)</span>
+                </label>
+                <input
+                  id="signup-instagram"
+                  type="text"
+                  autoComplete="off"
+                  placeholder="@votrepseudo"
+                  value={signupInsta}
+                  onChange={(e) => setSignupInsta(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <label
+                className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface p-4"
+                htmlFor="signup-promo"
+              >
+                <input
+                  id="signup-promo"
+                  type="checkbox"
+                  checked={signupPromo}
+                  onChange={(e) => setSignupPromo(e.target.checked)}
+                  className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer appearance-none rounded-md bg-surface-deep ring-2 ring-border transition-colors duration-150 checked:bg-accent checked:ring-accent"
+                />
+                <span className="text-xs leading-relaxed text-muted-foreground">
+                  Je veux recevoir les offres exclusives et les bons plans Pickel'z.
+                </span>
+              </label>
+              {signupError && <p className="animate-fade-in text-sm font-medium">{signupError}</p>}
+              <button
+                type="submit"
+                disabled={signupBusy}
+                className={`${btnPrimary} disabled:opacity-60`}
+              >
+                {signupBusy ? "Création…" : "Créer ma carte"}
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -1429,6 +1331,8 @@ export default function App() {
           </div>
         </div>
       )}
+
+      <Footer />
     </div>
   );
 }
