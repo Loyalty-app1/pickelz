@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { getLocalTimeZone } from "@internationalized/date";
 import DateRange from "./DateRange.jsx";
+import { useLiveDB } from "./useLiveDB.js";
 import {
   ADMIN_PASS,
   MAX_CARD_SIZE,
@@ -11,10 +12,12 @@ import {
   IMG_LOGO,
   TAGLINE,
   BASE,
-  loadDB,
-  saveDB,
-  seedDemoDB,
-  clearDB,
+  seedDemo,
+  clearAll,
+  setCardSize,
+  upsertReward,
+  deleteReward,
+  saveTitles,
   monthVisits,
   activeRewards,
   getTitle,
@@ -389,15 +392,12 @@ function AdminShell({ active, children }) {
 /* ============================== TABLEAU DE BORD ============================== */
 
 export function AdminDashboard() {
-  const [db, setDb] = useState(loadDB);
+  const { db, refresh } = useLiveDB();
   const [range, setRange] = useState(null); // {start, end} CalendarDate ou null = tout
   const [proofFilter, setProofFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
-
-  useEffect(() => {
-    saveDB(db);
-  }, [db]);
+  const [busy, setBusy] = useState(false);
 
   const users = db.users;
   const cardSize = db.cardSize;
@@ -514,17 +514,29 @@ export function AdminDashboard() {
     return [...list].sort((a, b) => monthVisits(b, cardSize) - monthVisits(a, cardSize));
   }, [users, search, cardSize]);
 
-  function handleSeed() {
-    setDb(seedDemoDB());
+  async function handleSeed() {
+    setBusy(true);
+    try {
+      await seedDemo();
+      refresh();
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function handleClear() {
+  async function handleClear() {
     if (
-      window.confirm(
+      !window.confirm(
         "Tout vider ? Clients, historiques, récompenses et titres personnalisés seront supprimés."
       )
-    ) {
-      setDb(clearDB());
+    )
+      return;
+    setBusy(true);
+    try {
+      await clearAll();
+      refresh();
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -558,16 +570,18 @@ export function AdminDashboard() {
           <button
             type="button"
             onClick={handleSeed}
-            className="h-11 rounded-full border-2 border-dashed border-muted-foreground/40 px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground"
+            disabled={busy}
+            className="h-11 rounded-full border-2 border-dashed border-muted-foreground/40 px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground disabled:opacity-40"
           >
-            Temp — Seed démo
+            {busy ? "…" : "Temp — Seed démo"}
           </button>
           <button
             type="button"
             onClick={handleClear}
-            className="h-11 rounded-full border-2 border-dashed border-muted-foreground/40 px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground"
+            disabled={busy}
+            className="h-11 rounded-full border-2 border-dashed border-muted-foreground/40 px-4 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground disabled:opacity-40"
           >
-            Temp — Tout vider
+            {busy ? "…" : "Temp — Tout vider"}
           </button>
         </div>
       </section>
@@ -840,15 +854,22 @@ const EMPTY_REWARD = {
 };
 
 export function AdminRewardsPage() {
-  const [db, setDb] = useState(loadDB);
+  const { db, refresh } = useLiveDB();
   const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState("");
 
-  useEffect(() => {
-    saveDB(db);
-  }, [db]);
-
   const sorted = [...db.rewards].sort((a, b) => a.visit - b.visit);
+
+  async function bumpCard(delta) {
+    const next = sanitizeCardSize(db.cardSize + delta);
+    if (next === db.cardSize) return;
+    try {
+      await setCardSize(next);
+      refresh();
+    } catch (err) {
+      /* le temps réel corrigera au prochain fetch */
+    }
+  }
 
   function openNew() {
     setFormError("");
@@ -865,7 +886,7 @@ export function AdminRewardsPage() {
     setFormError("");
   }
 
-  function handleSave(e) {
+  async function handleSave(e) {
     e.preventDefault();
     const visit = Number(editing.visit);
     if (!Number.isInteger(visit) || visit < 1 || visit > db.cardSize) {
@@ -884,29 +905,25 @@ export function AdminRewardsPage() {
       setFormError("La date de fin doit suivre la date de début.");
       return;
     }
-    const clean = {
-      ...editing,
-      visit,
-      label: editing.label.trim(),
-      detail: editing.detail.trim(),
-    };
-    setDb((prev) => {
-      const exists = prev.rewards.some((r) => r.id === clean.id);
-      return {
-        ...prev,
-        rewards: exists
-          ? prev.rewards.map((r) => (r.id === clean.id ? clean : r))
-          : [...prev.rewards, clean],
-      };
-    });
-    setEditing(null);
+    const clean = { ...editing, visit, label: editing.label.trim(), detail: editing.detail.trim() };
+    try {
+      await upsertReward(clean);
+      refresh();
+      setEditing(null);
+    } catch (err) {
+      setFormError("Enregistrement échoué — réessayez.");
+    }
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!editing) return;
-    if (window.confirm(`Supprimer « ${editing.label || "cette récompense"} » ?`)) {
-      setDb((prev) => ({ ...prev, rewards: prev.rewards.filter((r) => r.id !== editing.id) }));
+    if (!window.confirm(`Supprimer « ${editing.label || "cette récompense"} » ?`)) return;
+    try {
+      await deleteReward(editing.id);
+      refresh();
       setEditing(null);
+    } catch (err) {
+      setFormError("Suppression échouée — réessayez.");
     }
   }
 
@@ -940,9 +957,7 @@ export function AdminRewardsPage() {
             <button
               type="button"
               aria-label="Diminuer"
-              onClick={() =>
-                setDb((prev) => ({ ...prev, cardSize: sanitizeCardSize(prev.cardSize - CARD_STEP) }))
-              }
+              onClick={() => bumpCard(-CARD_STEP)}
               disabled={db.cardSize <= CARD_STEP}
               className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-deep font-display text-2xl font-bold text-foreground transition-colors duration-150 hover:bg-raised active:scale-95 disabled:opacity-30"
             >
@@ -954,9 +969,7 @@ export function AdminRewardsPage() {
             <button
               type="button"
               aria-label="Augmenter"
-              onClick={() =>
-                setDb((prev) => ({ ...prev, cardSize: sanitizeCardSize(prev.cardSize + CARD_STEP) }))
-              }
+              onClick={() => bumpCard(CARD_STEP)}
               disabled={db.cardSize >= MAX_CARD_SIZE}
               className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-deep font-display text-2xl font-bold text-foreground transition-colors duration-150 hover:bg-raised active:scale-95 disabled:opacity-30"
             >
@@ -1153,35 +1166,41 @@ export function AdminRewardsPage() {
 /* ============================== TITRES (EN CASCADE) ============================== */
 
 export function AdminTitlesPage() {
-  const [db, setDb] = useState(loadDB);
-  const [draft, setDraft] = useState(() => [...loadDB().titles].sort((a, b) => a.min - b.min));
+  const { db, refresh } = useLiveDB();
+  const [draft, setDraft] = useState(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
+  // Amorce le brouillon une fois les titres chargés depuis Supabase.
   useEffect(() => {
-    saveDB(db);
-  }, [db]);
+    if (draft === null && !db.loading) {
+      setDraft([...db.titles].sort((a, b) => a.min - b.min));
+    }
+  }, [db.loading, db.titles, draft]);
 
   function setRow(i, field, value) {
-    setDraft((prev) => prev.map((t, idx) => (idx === i ? { ...t, [field]: value } : t)));
+    setDraft((prev) => (prev || []).map((t, idx) => (idx === i ? { ...t, [field]: value } : t)));
     setError("");
     setSaved(false);
   }
 
   function addRow() {
-    const lastMin = draft.length > 0 ? Number(draft[draft.length - 1].min) : 0;
-    setDraft((prev) => [...prev, { min: lastMin + 10, label: "" }]);
+    setDraft((prev) => {
+      const list = prev || [];
+      const lastMin = list.length > 0 ? Number(list[list.length - 1].min) : 0;
+      return [...list, { min: lastMin + 10, label: "" }];
+    });
     setSaved(false);
   }
 
   function removeRow(i) {
-    setDraft((prev) => prev.filter((_, idx) => idx !== i));
+    setDraft((prev) => (prev || []).filter((_, idx) => idx !== i));
     setError("");
     setSaved(false);
   }
 
-  function handleSave() {
-    if (draft.length === 0) {
+  async function handleSave() {
+    if (!draft || draft.length === 0) {
       setError("Il faut au moins un titre.");
       return;
     }
@@ -1206,10 +1225,15 @@ export function AdminTitlesPage() {
         return;
       }
     }
-    setDb((prev) => ({ ...prev, titles: rows }));
-    setError("");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      await saveTitles(rows);
+      refresh();
+      setError("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError("Enregistrement échoué — réessayez.");
+    }
   }
 
   return (
@@ -1222,7 +1246,7 @@ export function AdminTitlesPage() {
         </p>
 
         <div className="mt-6 space-y-2">
-          {draft.map((t, i) => (
+          {(draft || []).map((t, i) => (
             <div key={i} className="flex items-center gap-3" style={{ paddingLeft: `${i * 20}px` }}>
               <div
                 className="h-1 w-4 shrink-0 rounded-full bg-accent"

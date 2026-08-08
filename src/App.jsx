@@ -1,21 +1,24 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, ArrowRight, ChevronDown } from "lucide-react";
+import { useLiveDB } from "./useLiveDB.js";
 import {
   SERVER_CODES,
   IMG_STAMP,
   IMG_LOGO,
   TAGLINE,
   INSTA_HANDLE,
-  loadDB,
-  saveDB,
-  seedDemoDB,
   monthVisits,
   activeRewards,
   getTitle,
-  generateUniqueCode,
-  generateRecordId,
   formatDateFR,
+  fetchDB,
+  createCustomer,
+  addVisit,
+  updateCustomer,
+  seedDemo,
 } from "./store.js";
+
+const SESSION_KEY = "tfc_current"; // code de l'utilisateur connecté (session locale)
 
 // Rotation par tampon pour un rendu tamponné à la main
 const STAMP_ROTATIONS = [-7, 5, -4, 8, -6, 3, 7, -5, 4, -8];
@@ -27,8 +30,25 @@ const CELL_INSET = "calc((100% - 2rem) / 10)";
 // Confettis de la petite célébration (récompense débloquée)
 const CONFETTI_COLORS = ["#FFE0C4", "#FFFFFF", "#C87A2F", "#D1AC9F"];
 
+function Splash({ text, sub }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center font-sans text-foreground">
+      <img src={IMG_LOGO} alt="Pickel'z" className="w-52 animate-pulse" />
+      <p className="text-sm font-semibold uppercase tracking-[0.15em] text-muted-foreground">{text}</p>
+      {sub && <p className="max-w-xs text-xs text-muted-foreground/70">{sub}</p>}
+    </div>
+  );
+}
+
 export default function App() {
-  const [db, setDb] = useState(loadDB);
+  const { db, setDb, refresh } = useLiveDB();
+  const [currentUserId, setCurrentUserId] = useState(() => localStorage.getItem(SESSION_KEY));
+
+  function selectUser(code) {
+    if (code) localStorage.setItem(SESSION_KEY, code);
+    else localStorage.removeItem(SESSION_KEY);
+    setCurrentUserId(code);
+  }
 
   // Écran d'accueil
   const [loginCode, setLoginCode] = useState("");
@@ -42,6 +62,7 @@ export default function App() {
   const [signupInsta, setSignupInsta] = useState("");
   const [signupPromo, setSignupPromo] = useState(true);
   const [signupError, setSignupError] = useState("");
+  const [signupBusy, setSignupBusy] = useState(false);
   const [createdUser, setCreatedUser] = useState(null);
   const [codeRevealed, setCodeRevealed] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -72,16 +93,12 @@ export default function App() {
   const [gridOpen, setGridOpen] = useState(false);
 
   useEffect(() => {
-    saveDB(db);
-  }, [db]);
-
-  useEffect(() => {
     if (visitOpen && visitStep === "pin" && pin.length === 4) {
       validatePin(pin);
     }
   }, [pin, visitStep, visitOpen]);
 
-  const currentUser = db.users.find((u) => u.id === db.currentUserId) || null;
+  const currentUser = db.users.find((u) => u.id === currentUserId) || null;
   const cardSize = db.cardSize;
   const gridRows = Math.ceil(cardSize / GRID_COLS);
   // Seules les récompenses atteignables sur la carte actuelle
@@ -112,26 +129,33 @@ export default function App() {
       setLoginError("Entrez votre code pour continuer.");
       return;
     }
-    const normalized = /^\d{4}$/.test(raw) ? `CF-${raw}` : raw;
-    const user = db.users.find((u) => u.id === normalized);
+    const user = db.users.find((u) => u.id === raw);
     if (!user) {
       setLoginError("Ce code ne nous dit rien… Vérifiez-le, ou créez votre carte juste en dessous.");
       return;
     }
     setLoginError("");
     setLoginCode("");
-    setDb((prev) => ({ ...prev, currentUserId: user.id }));
+    selectUser(user.id);
   }
 
   // TEMP : connexion de démonstration sans code
-  function handleDemoLogin() {
-    setDb((prev) => {
-      const base = prev.users.length > 0 ? prev : seedDemoDB();
-      return { ...base, currentUserId: base.users[0].id };
-    });
+  async function handleDemoLogin() {
+    try {
+      let users = db.users;
+      if (users.length === 0) {
+        await seedDemo();
+        const fresh = await fetchDB();
+        users = fresh.users;
+        refresh();
+      }
+      if (users.length) selectUser(users[0].id);
+    } catch (err) {
+      setLoginError("Impossible de joindre la base. Réessayez.");
+    }
   }
 
-  function handleCreateCard(e) {
+  async function handleCreateCard(e) {
     e.preventDefault();
     const name = signupName.trim();
     const nickname = signupNickname.trim();
@@ -148,23 +172,30 @@ export default function App() {
       setSignupError("Ce numéro de téléphone semble incomplet.");
       return;
     }
-    const newUser = {
-      id: generateUniqueCode(db.users),
-      name,
-      nickname,
-      phone: signupPhone.trim(),
-      instagram: signupInsta.trim().replace(/^@/, ""),
-      promoOptIn: signupPromo,
-      history: [],
-    };
-    // Création = connexion immédiate ; la révélation du code s'affiche par-dessus le parcours
-    setDb((prev) => ({
-      ...prev,
-      users: [...prev.users, newUser],
-      currentUserId: newUser.id,
-    }));
-    setCreatedUser(newUser);
     setSignupError("");
+    setSignupBusy(true);
+    try {
+      const existingCodes = new Set(db.users.map((u) => u.id));
+      const newUser = await createCustomer(
+        {
+          name,
+          nickname,
+          phone: signupPhone.trim(),
+          instagram: signupInsta.trim().replace(/^@/, ""),
+          promoOptIn: signupPromo,
+        },
+        existingCodes
+      );
+      // Création = connexion immédiate ; ajout optimiste + révélation du code
+      setDb((prev) => ({ ...prev, users: [...prev.users, newUser] }));
+      selectUser(newUser.id);
+      setCreatedUser(newUser);
+      refresh();
+    } catch (err) {
+      setSignupError("La création a échoué. Vérifiez votre connexion et réessayez.");
+    } finally {
+      setSignupBusy(false);
+    }
   }
 
   function handleCopyCode() {
@@ -222,7 +253,7 @@ export default function App() {
     setProfileOpen(true);
   }
 
-  function handleSaveProfile(e) {
+  async function handleSaveProfile(e) {
     e.preventDefault();
     const name = profileName.trim();
     const nickname = profileNickname.trim();
@@ -239,28 +270,34 @@ export default function App() {
       setProfileError("Ce numéro de téléphone semble incomplet.");
       return;
     }
+    if (!currentUser) return;
+    const patch = {
+      name,
+      nickname,
+      phone: profilePhone.trim(),
+      instagram: profileInsta.trim().replace(/^@/, ""),
+      promoOptIn: profilePromo,
+    };
+    // Mise à jour optimiste, puis écriture Supabase
     setDb((prev) => ({
       ...prev,
-      users: prev.users.map((u) =>
-        u.id === prev.currentUserId
-          ? {
-              ...u,
-              name,
-              nickname,
-              phone: profilePhone.trim(),
-              instagram: profileInsta.trim().replace(/^@/, ""),
-              promoOptIn: profilePromo,
-            }
-          : u
-      ),
+      users: prev.users.map((u) => (u.id === currentUserId ? { ...u, ...patch } : u)),
     }));
     setProfileError("");
     setProfileSaved(true);
+    try {
+      await updateCustomer(currentUser.dbId, patch);
+      refresh();
+    } catch (err) {
+      setProfileError("Enregistrement échoué — réessayez.");
+      setProfileSaved(false);
+      return;
+    }
     setTimeout(() => setProfileOpen(false), 800);
   }
 
   function handleLogout() {
-    setDb((prev) => ({ ...prev, currentUserId: null }));
+    selectUser(null);
     setLoginCode("");
     setLoginError("");
     setRewardBanner(null);
@@ -304,23 +341,33 @@ export default function App() {
     setPin((prev) => prev.slice(0, -1));
   }
 
-  // Enregistre une visite puis déclenche tampon + bandeau APRÈS fermeture du volet
+  // Enregistre une visite : ajout optimiste (choreographie du tampon) + écriture Supabase.
   function applyStamp(type, serverCode) {
-    const user = db.users.find((u) => u.id === db.currentUserId);
+    const user = db.users.find((u) => u.id === currentUserId);
     if (!user) return;
     const newCount = Math.min(monthVisits(user, cardSize) + 1, cardSize);
-    const record = {
-      id: generateRecordId(),
-      date: new Date().toISOString(),
-      type,
-      serverCode,
-    };
+    const tempId = `temp-${Date.now()}`;
+    const record = { id: tempId, date: new Date().toISOString(), type, serverCode };
     setDb((prev) => ({
       ...prev,
       users: prev.users.map((u) =>
-        u.id === prev.currentUserId ? { ...u, history: [...u.history, record] } : u
+        u.id === currentUserId ? { ...u, history: [...u.history, record] } : u
       ),
     }));
+    // Écriture réelle en arrière-plan ; le temps réel réconcilie ensuite.
+    addVisit(user.dbId, type, serverCode)
+      .then(() => refresh())
+      .catch(() => {
+        // Échec : on retire le tampon optimiste
+        setDb((prev) => ({
+          ...prev,
+          users: prev.users.map((u) =>
+            u.id === currentUserId
+              ? { ...u, history: u.history.filter((h) => h.id !== tempId) }
+              : u
+          ),
+        }));
+      });
     setTimeout(() => {
       setGridOpen(true);
       setJustStamped(newCount);
@@ -497,6 +544,10 @@ export default function App() {
   const btnGhost =
     "h-14 w-full rounded-full border-2 border-foreground/70 font-display text-lg font-extrabold tracking-wide text-foreground transition-all duration-150 hover:bg-foreground hover:text-accent-foreground active:scale-[0.97]";
 
+  if (db.loading) return <Splash text="Chargement…" />;
+  if (db.error)
+    return <Splash text="Connexion à la base impossible" sub="Vérifiez votre réseau puis rechargez la page." />;
+
   return (
     <div className="min-h-screen bg-background font-sans text-foreground antialiased">
       <style>{`
@@ -603,8 +654,8 @@ export default function App() {
                   type="text"
                   inputMode="text"
                   autoComplete="off"
-                  maxLength={7}
-                  placeholder="CF-0000"
+                  maxLength={10}
+                  placeholder="AB-000000"
                   value={loginCode}
                   onChange={(e) => {
                     setLoginCode(e.target.value.toUpperCase());
@@ -968,8 +1019,12 @@ export default function App() {
                   {signupError && (
                     <p className="animate-fade-in text-sm font-medium">{signupError}</p>
                   )}
-                  <button type="submit" className={btnPrimary}>
-                    Créer ma carte
+                  <button
+                    type="submit"
+                    disabled={signupBusy}
+                    className={`${btnPrimary} disabled:opacity-60`}
+                  >
+                    {signupBusy ? "Création…" : "Créer ma carte"}
                   </button>
                 </form>
               </>
@@ -979,8 +1034,8 @@ export default function App() {
                 <h2 className="mt-6 font-display text-3xl font-extrabold leading-tight">
                   Bienvenue, {createdUser.nickname || createdUser.name.split(" ")[0]} !
                 </h2>
-                <p className="mx-auto mt-2 max-w-[280px] text-sm leading-relaxed text-muted-foreground">
-                  Voici votre code personnel. Notez-le : il vous permet de retrouver vos tampons sur
+                <p className="mx-auto mt-2 max-w-[290px] text-sm leading-relaxed text-muted-foreground">
+                  Voici votre code personnel : c'est votre clé pour retrouver vos tampons sur
                   n'importe quel téléphone.
                 </p>
 
@@ -994,6 +1049,10 @@ export default function App() {
                 >
                   {createdUser.id}
                 </div>
+
+                <p className="mx-auto mt-4 max-w-[290px] text-xs font-semibold leading-relaxed text-foreground">
+                  ⚠️ Gardez-le confidentiel et notez-le bien — il ne sera plus jamais réaffiché.
+                </p>
 
                 <div className="mt-6 space-y-3">
                   {!codeRevealed ? (

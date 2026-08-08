@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo } from "react";
 import { Wheel } from "react-custom-roulette";
 import { X } from "lucide-react";
-import { loadDB, isSameMonth, IMG_LOGO, TAGLINE, BASE } from "./store.js";
+import { useLiveDB } from "./useLiveDB.js";
+import { isSameMonth, IMG_LOGO, TAGLINE, BASE } from "./store.js";
 
 const MAUVE = "#673447";
 const APRICOT = "#FFE0C4";
@@ -16,6 +17,7 @@ function shortName(u) {
 }
 
 export default function RoulettePage() {
+  const { db } = useLiveDB();
   const [mustSpin, setMustSpin] = useState(false);
   const [prizeNumber, setPrizeNumber] = useState(0);
   const [winner, setWinner] = useState(null);
@@ -24,10 +26,11 @@ export default function RoulettePage() {
   const audioRef = useRef(null);
   const tickTimerRef = useRef(null);
 
-  const participants = useMemo(() => {
-    const db = loadDB();
-    return db.users.filter((u) => u.history.some((h) => isSameMonth(h.date)));
-  }, []);
+  // Participants du mois — recalculés en direct depuis Supabase.
+  const participants = useMemo(
+    () => db.users.filter((u) => u.history.some((h) => isSameMonth(h.date))),
+    [db.users]
+  );
 
   const wheelData = participants.map((u, i) => ({
     option: shortName(u),
