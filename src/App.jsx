@@ -589,7 +589,7 @@ export default function App() {
               className="mx-auto w-64 max-w-full"
             />
 
-            <h1 className="mt-8 text-center font-display text-3xl font-extrabold text-white">
+            <h1 className="mt-8 text-center font-display text-3xl font-extrabold text-[#FFE0C4]">
               Love at the first bite <span aria-hidden="true">♥</span>
             </h1>
 
