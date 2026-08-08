@@ -116,6 +116,8 @@ export async function loginCustomer(code) {
   return unwrap(await supabase.rpc("login_customer", { p_code: code }));
 }
 
+// fields.code : code choisi par le client (vide = généré côté serveur).
+// Lève une erreur dont .message vaut 'code_taken' ou 'invalid_code' le cas échéant.
 export async function createCustomer(fields) {
   return unwrap(
     await supabase.rpc("create_customer", {
@@ -124,6 +126,7 @@ export async function createCustomer(fields) {
       p_phone: fields.phone,
       p_instagram: fields.instagram || "",
       p_promo: Boolean(fields.promoOptIn),
+      p_code: (fields.code || "").trim().toUpperCase(),
     })
   );
 }
@@ -197,4 +200,19 @@ export async function adminSeed(pin) {
 
 export async function adminClear(pin) {
   return unwrap(await supabase.rpc("admin_clear", { p_pin: pin }));
+}
+
+// Serveurs : chaque serveur a son code (renouvelé toutes les 24 h côté base).
+// Ces RPC renvoient la liste à jour des serveurs.
+export async function adminAddServer(pin, name) {
+  return unwrap(await supabase.rpc("admin_add_server", { p_pin: pin, p_name: name }));
+}
+
+export async function adminRemoveServer(pin, id) {
+  return unwrap(await supabase.rpc("admin_remove_server", { p_pin: pin, p_id: id }));
+}
+
+// Change le code admin. Lève une erreur .message='weak_pin' si trop court.
+export async function adminSetPin(pin, newPin) {
+  return unwrap(await supabase.rpc("admin_set_pin", { p_pin: pin, p_new_pin: newPin }));
 }

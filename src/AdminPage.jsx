@@ -18,6 +18,9 @@ import {
   adminUpsertReward,
   adminDeleteReward,
   adminSaveTitles,
+  adminAddServer,
+  adminRemoveServer,
+  adminSetPin,
   monthVisits,
   activeRewards,
   getTitle,
@@ -406,12 +409,17 @@ function AdminShell({ active, children }) {
 
 export function AdminDashboard() {
   // Snapshot complet (PII incluse) via RPC protégée par PIN, rafraîchi périodiquement.
-  const [db, setDb] = useState({ users: [], rewards: [], titles: [], cardSize: 50 });
+  const [db, setDb] = useState({ users: [], rewards: [], titles: [], cardSize: 50, servers: [] });
   const [range, setRange] = useState(null); // {start, end} CalendarDate ou null = tout
   const [proofFilter, setProofFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Gestion équipe & code admin
+  const [newServerName, setNewServerName] = useState("");
+  const [serverBusy, setServerBusy] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [pinMsg, setPinMsg] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -569,6 +577,51 @@ export function AdminDashboard() {
     }
   }
 
+  async function handleAddServer(e) {
+    e.preventDefault();
+    const name = newServerName.trim();
+    if (name.length < 1) return;
+    setServerBusy(true);
+    try {
+      await adminAddServer(adminPin(), name);
+      setNewServerName("");
+      await refresh();
+    } catch (err) {
+      /* le prochain fetch corrigera */
+    } finally {
+      setServerBusy(false);
+    }
+  }
+
+  async function handleRemoveServer(id, name) {
+    if (!window.confirm(`Retirer « ${name} » ? Son code ne sera plus valide.`)) return;
+    setServerBusy(true);
+    try {
+      await adminRemoveServer(adminPin(), id);
+      await refresh();
+    } finally {
+      setServerBusy(false);
+    }
+  }
+
+  async function handleChangePin(e) {
+    e.preventDefault();
+    const np = newPin.trim();
+    if (np.length < 4) {
+      setPinMsg("Choisissez un code d'au moins 4 caractères.");
+      return;
+    }
+    try {
+      await adminSetPin(adminPin(), np);
+      sessionStorage.setItem(ADMIN_PIN_KEY, np); // la session reste valide
+      setNewPin("");
+      setPinMsg("Code admin mis à jour ✓");
+      setTimeout(() => setPinMsg(""), 2500);
+    } catch (err) {
+      setPinMsg("Échec — réessayez.");
+    }
+  }
+
   return (
     <AdminShell active="dash">
       {/* Filtres */}
@@ -693,6 +746,98 @@ export function AdminDashboard() {
           >
             <HBars data={stats.rewardBars} />
           </ChartCard>
+        </div>
+      </section>
+
+      {/* Équipe & accès */}
+      <section className="mt-10">
+        <h2 className="mb-3 font-display text-2xl font-extrabold">Équipe & accès</h2>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <GlowCard>
+              <p className="font-display text-lg font-bold">Codes équipe</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Un code par serveur, renouvelé automatiquement toutes les 24 h. C'est ce code que le
+                serveur saisit pour valider une visite.
+              </p>
+              <div className="mt-4 space-y-2">
+                {db.servers.length === 0 ? (
+                  <p className="rounded-2xl bg-surface-deep px-4 py-6 text-center text-sm text-muted-foreground">
+                    Aucun serveur pour l'instant.
+                  </p>
+                ) : (
+                  db.servers.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl bg-surface-deep px-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-display text-base font-bold">{s.name}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                          Code du jour
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-display text-2xl font-extrabold tabular-nums tracking-[0.25em] text-accent">
+                          {s.code}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveServer(s.id, s.name)}
+                          disabled={serverBusy}
+                          aria-label={`Retirer ${s.name}`}
+                          className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors duration-150 hover:bg-raised hover:text-foreground disabled:opacity-40"
+                        >
+                          <Trash2 size={16} strokeWidth={2} />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <form onSubmit={handleAddServer} className="mt-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newServerName}
+                  onChange={(e) => setNewServerName(e.target.value)}
+                  placeholder="Nom du serveur"
+                  className="h-11 min-w-0 flex-1 rounded-full border-2 border-transparent bg-surface-deep px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
+                />
+                <button
+                  type="submit"
+                  disabled={serverBusy || newServerName.trim().length < 1}
+                  className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-4 font-display text-sm font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97] disabled:opacity-40"
+                >
+                  <Plus size={16} strokeWidth={2.5} />
+                  Ajouter
+                </button>
+              </form>
+            </GlowCard>
+          </div>
+          <div className="lg:col-span-5">
+            <GlowCard className="h-full">
+              <p className="font-display text-lg font-bold">Code admin</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Le code d'accès à cet espace. Choisissez-en un solide, différent des codes serveur.
+              </p>
+              <form onSubmit={handleChangePin} className="mt-4 space-y-2">
+                <input
+                  type="password"
+                  value={newPin}
+                  onChange={(e) => {
+                    setNewPin(e.target.value);
+                    setPinMsg("");
+                  }}
+                  placeholder="Nouveau code admin"
+                  className="h-11 w-full rounded-full border-2 border-transparent bg-surface-deep px-4 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
+                />
+                <button type="submit" className={`${BTN} w-full`}>
+                  Changer le code
+                </button>
+              </form>
+              {pinMsg && <p className="animate-fade-in mt-2 text-sm font-medium">{pinMsg}</p>}
+            </GlowCard>
+          </div>
         </div>
       </section>
 

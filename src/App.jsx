@@ -82,6 +82,7 @@ export default function App() {
   const [signupNickname, setSignupNickname] = useState("");
   const [signupPhone, setSignupPhone] = useState("");
   const [signupInsta, setSignupInsta] = useState("");
+  const [signupCode, setSignupCode] = useState("");
   const [signupPromo, setSignupPromo] = useState(true);
   const [signupError, setSignupError] = useState("");
   const [signupBusy, setSignupBusy] = useState(false);
@@ -170,6 +171,7 @@ export default function App() {
     const name = signupName.trim();
     const nickname = signupNickname.trim();
     const phoneDigits = signupPhone.replace(/\D/g, "");
+    const code = signupCode.trim().toUpperCase();
     if (name.length < 2) {
       setSignupError("On aimerait connaître votre nom !");
       return;
@@ -182,6 +184,10 @@ export default function App() {
       setSignupError("Ce numéro de téléphone semble incomplet.");
       return;
     }
+    if (code.length < 4 || code.length > 20 || !/^[A-Z0-9-]+$/.test(code)) {
+      setSignupError("Choisissez un code de 4 à 20 caractères : lettres, chiffres ou tirets.");
+      return;
+    }
     setSignupError("");
     setSignupBusy(true);
     try {
@@ -191,12 +197,19 @@ export default function App() {
         phone: signupPhone.trim(),
         instagram: signupInsta.trim().replace(/^@/, ""),
         promoOptIn: signupPromo,
+        code,
       });
       // Création = connexion immédiate ; puis révélation du code
       setSession(newUser);
       setCreatedUser(newUser);
     } catch (err) {
-      setSignupError("La création a échoué. Vérifiez votre connexion et réessayez.");
+      if (err && err.message === "code_taken") {
+        setSignupError("Ce code est déjà pris — choisissez-en un autre.");
+      } else if (err && err.message === "invalid_code") {
+        setSignupError("Code invalide : 4 à 20 caractères, lettres, chiffres ou tirets.");
+      } else {
+        setSignupError("La création a échoué. Vérifiez votre connexion et réessayez.");
+      }
     } finally {
       setSignupBusy(false);
     }
@@ -238,6 +251,7 @@ export default function App() {
     setSignupNickname("");
     setSignupPhone("");
     setSignupInsta("");
+    setSignupCode("");
     setSignupPromo(true);
     setSignupError("");
     setCreatedUser(null);
@@ -950,6 +964,29 @@ export default function App() {
                       onChange={(e) => setSignupInsta(e.target.value)}
                       className={inputClass}
                     />
+                  </div>
+                  <div>
+                    <label htmlFor="signup-code" className={labelClass}>
+                      Choisissez votre code
+                    </label>
+                    <input
+                      id="signup-code"
+                      type="text"
+                      autoComplete="off"
+                      inputMode="text"
+                      maxLength={20}
+                      placeholder="MONCODE"
+                      value={signupCode}
+                      onChange={(e) => {
+                        setSignupCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""));
+                        setSignupError("");
+                      }}
+                      className={`${inputClass} font-semibold tracking-[0.12em]`}
+                    />
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+                      C'est votre clé pour retrouver vos tampons. 4 à 20 caractères — à garder
+                      confidentiel.
+                    </p>
                   </div>
                   <label
                     className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface p-4"
