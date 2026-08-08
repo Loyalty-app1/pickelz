@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
 import { getLocalTimeZone } from "@internationalized/date";
 import DateRange from "./DateRange.jsx";
-import { useLiveDB } from "./useLiveDB.js";
+import { useConfig } from "./useLiveDB.js";
 import {
-  ADMIN_PASS,
   MAX_CARD_SIZE,
   CARD_STEP,
   sanitizeCardSize,
@@ -12,18 +11,22 @@ import {
   IMG_LOGO,
   TAGLINE,
   BASE,
-  seedDemo,
-  clearAll,
-  setCardSize,
-  upsertReward,
-  deleteReward,
-  saveTitles,
+  adminSnapshot,
+  adminSeed,
+  adminClear,
+  adminSetCardSize,
+  adminUpsertReward,
+  adminDeleteReward,
+  adminSaveTitles,
   monthVisits,
   activeRewards,
   getTitle,
   formatDateFR,
   isSameMonth,
 } from "./store.js";
+
+const ADMIN_PIN_KEY = "tfc_admin_pin";
+const adminPin = () => sessionStorage.getItem(ADMIN_PIN_KEY) || "";
 
 // Paire catégorielle validée sur la surface mauve profonde #53293A :
 // bande de luminance OKLab, plancher de chroma, séparation CVD (ΔE 80) et contraste ≥ 3:1.
@@ -291,22 +294,32 @@ function HBars({ data }) {
 /* ============================== ACCÈS ADMIN ============================== */
 
 function AdminGate({ children }) {
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem("tfc_admin") === "1");
+  const [unlocked, setUnlocked] = useState(() => !!sessionStorage.getItem(ADMIN_PIN_KEY));
   const [pass, setPass] = useState("");
   const [shake, setShake] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
-    if (pass === ADMIN_PASS) {
-      sessionStorage.setItem("tfc_admin", "1");
-      setUnlocked(true);
-    } else {
-      setShake(true);
-      setTimeout(() => {
-        setShake(false);
-        setPass("");
-      }, 500);
+    setBusy(true);
+    try {
+      // Le PIN est vérifié EN BASE : un snapshot non-null = PIN correct.
+      const snap = await adminSnapshot(pass);
+      if (snap) {
+        sessionStorage.setItem(ADMIN_PIN_KEY, pass);
+        setUnlocked(true);
+        return;
+      }
+    } catch (err) {
+      /* traité comme un échec */
+    } finally {
+      setBusy(false);
     }
+    setShake(true);
+    setTimeout(() => {
+      setShake(false);
+      setPass("");
+    }, 500);
   }
 
   if (unlocked) return children;
@@ -331,8 +344,8 @@ function AdminGate({ children }) {
           autoFocus
           className="mt-6 h-14 w-full rounded-2xl border-2 border-transparent bg-surface px-4 text-center font-display text-2xl tracking-[0.4em] text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/40 focus:border-foreground"
         />
-        <button type="submit" className={`${BTN} mt-4 w-full`}>
-          Entrer
+        <button type="submit" disabled={busy} className={`${BTN} mt-4 w-full disabled:opacity-60`}>
+          {busy ? "…" : "Entrer"}
         </button>
         <a
           href={BASE}
@@ -392,12 +405,28 @@ function AdminShell({ active, children }) {
 /* ============================== TABLEAU DE BORD ============================== */
 
 export function AdminDashboard() {
-  const { db, refresh } = useLiveDB();
+  // Snapshot complet (PII incluse) via RPC protégée par PIN, rafraîchi périodiquement.
+  const [db, setDb] = useState({ users: [], rewards: [], titles: [], cardSize: 50 });
   const [range, setRange] = useState(null); // {start, end} CalendarDate ou null = tout
   const [proofFilter, setProofFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const snap = await adminSnapshot(adminPin());
+      if (snap) setDb(snap);
+    } catch (err) {
+      /* PIN révoqué / réseau : on garde l'affichage courant */
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 15000); // pas de temps réel sur les tables PII
+    return () => clearInterval(t);
+  }, [refresh]);
 
   const users = db.users;
   const cardSize = db.cardSize;
@@ -517,7 +546,7 @@ export function AdminDashboard() {
   async function handleSeed() {
     setBusy(true);
     try {
-      await seedDemo();
+      await adminSeed(adminPin());
       refresh();
     } finally {
       setBusy(false);
@@ -533,7 +562,7 @@ export function AdminDashboard() {
       return;
     setBusy(true);
     try {
-      await clearAll();
+      await adminClear(adminPin());
       refresh();
     } finally {
       setBusy(false);
@@ -854,7 +883,8 @@ const EMPTY_REWARD = {
 };
 
 export function AdminRewardsPage() {
-  const { db, refresh } = useLiveDB();
+  const { config, refresh } = useConfig();
+  const db = config; // {rewards, titles, cardSize}
   const [editing, setEditing] = useState(null);
   const [formError, setFormError] = useState("");
 
@@ -864,10 +894,10 @@ export function AdminRewardsPage() {
     const next = sanitizeCardSize(db.cardSize + delta);
     if (next === db.cardSize) return;
     try {
-      await setCardSize(next);
+      await adminSetCardSize(adminPin(), next);
       refresh();
     } catch (err) {
-      /* le temps réel corrigera au prochain fetch */
+      /* le prochain fetch corrigera */
     }
   }
 
@@ -907,7 +937,7 @@ export function AdminRewardsPage() {
     }
     const clean = { ...editing, visit, label: editing.label.trim(), detail: editing.detail.trim() };
     try {
-      await upsertReward(clean);
+      await adminUpsertReward(adminPin(), clean);
       refresh();
       setEditing(null);
     } catch (err) {
@@ -919,7 +949,7 @@ export function AdminRewardsPage() {
     if (!editing) return;
     if (!window.confirm(`Supprimer « ${editing.label || "cette récompense"} » ?`)) return;
     try {
-      await deleteReward(editing.id);
+      await adminDeleteReward(adminPin(), editing.id);
       refresh();
       setEditing(null);
     } catch (err) {
@@ -1166,17 +1196,18 @@ export function AdminRewardsPage() {
 /* ============================== TITRES (EN CASCADE) ============================== */
 
 export function AdminTitlesPage() {
-  const { db, refresh } = useLiveDB();
+  const { config, refresh } = useConfig();
+  const db = config; // {rewards, titles, cardSize}
   const [draft, setDraft] = useState(null);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
   // Amorce le brouillon une fois les titres chargés depuis Supabase.
   useEffect(() => {
-    if (draft === null && !db.loading) {
+    if (draft === null && !config.loading) {
       setDraft([...db.titles].sort((a, b) => a.min - b.min));
     }
-  }, [db.loading, db.titles, draft]);
+  }, [config.loading, db.titles, draft]);
 
   function setRow(i, field, value) {
     setDraft((prev) => (prev || []).map((t, idx) => (idx === i ? { ...t, [field]: value } : t)));
@@ -1226,7 +1257,7 @@ export function AdminTitlesPage() {
       }
     }
     try {
-      await saveTitles(rows);
+      await adminSaveTitles(adminPin(), rows);
       refresh();
       setError("");
       setSaved(true);

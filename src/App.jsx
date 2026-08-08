@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { X, ArrowRight, ChevronDown } from "lucide-react";
-import { useLiveDB } from "./useLiveDB.js";
+import { useConfig } from "./useLiveDB.js";
 import {
-  SERVER_CODES,
   IMG_STAMP,
   IMG_LOGO,
   TAGLINE,
@@ -11,11 +10,10 @@ import {
   activeRewards,
   getTitle,
   formatDateFR,
-  fetchDB,
+  loginCustomer,
   createCustomer,
   addVisit,
   updateCustomer,
-  seedDemo,
 } from "./store.js";
 
 const SESSION_KEY = "tfc_current"; // code de l'utilisateur connecté (session locale)
@@ -41,14 +39,38 @@ function Splash({ text, sub }) {
 }
 
 export default function App() {
-  const { db, setDb, refresh } = useLiveDB();
-  const [currentUserId, setCurrentUserId] = useState(() => localStorage.getItem(SESSION_KEY));
+  const { config } = useConfig();
+  // L'utilisateur connecté : son propre enregistrement (chargé via RPC), jamais
+  // la liste de tous les clients.
+  const [currentUser, setCurrentUser] = useState(null);
+  const [restoring, setRestoring] = useState(true);
 
-  function selectUser(code) {
-    if (code) localStorage.setItem(SESSION_KEY, code);
+  function setSession(user) {
+    if (user) localStorage.setItem(SESSION_KEY, user.id);
     else localStorage.removeItem(SESSION_KEY);
-    setCurrentUserId(code);
+    setCurrentUser(user);
   }
+
+  // Restaure la session (code en localStorage) au montage.
+  useEffect(() => {
+    const code = localStorage.getItem(SESSION_KEY);
+    if (!code) {
+      setRestoring(false);
+      return;
+    }
+    let alive = true;
+    loginCustomer(code)
+      .then((rec) => {
+        if (!alive) return;
+        if (rec) setCurrentUser(rec);
+        else localStorage.removeItem(SESSION_KEY);
+      })
+      .catch(() => {})
+      .finally(() => alive && setRestoring(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Écran d'accueil
   const [loginCode, setLoginCode] = useState("");
@@ -94,17 +116,17 @@ export default function App() {
 
   useEffect(() => {
     if (visitOpen && visitStep === "pin" && pin.length === 4) {
-      validatePin(pin);
+      submitStamp(pin);
     }
   }, [pin, visitStep, visitOpen]);
 
-  const currentUser = db.users.find((u) => u.id === currentUserId) || null;
-  const cardSize = db.cardSize;
+  const cardSize = config.cardSize;
+  const titles = config.titles;
   const gridRows = Math.ceil(cardSize / GRID_COLS);
   // Seules les récompenses atteignables sur la carte actuelle
   const rewards = useMemo(
-    () => activeRewards(db.rewards).filter((r) => r.visit <= cardSize),
-    [db.rewards, cardSize]
+    () => activeRewards(config.rewards).filter((r) => r.visit <= cardSize),
+    [config.rewards, cardSize]
   );
   const visits = currentUser ? monthVisits(currentUser, cardSize) : 0;
 
@@ -122,34 +144,22 @@ export default function App() {
     }));
   }, [rewardBanner]);
 
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
     const raw = loginCode.trim().toUpperCase().replace(/\s+/g, "");
     if (!raw) {
       setLoginError("Entrez votre code pour continuer.");
       return;
     }
-    const user = db.users.find((u) => u.id === raw);
-    if (!user) {
-      setLoginError("Ce code ne nous dit rien… Vérifiez-le, ou créez votre carte juste en dessous.");
-      return;
-    }
-    setLoginError("");
-    setLoginCode("");
-    selectUser(user.id);
-  }
-
-  // TEMP : connexion de démonstration sans code
-  async function handleDemoLogin() {
     try {
-      let users = db.users;
-      if (users.length === 0) {
-        await seedDemo();
-        const fresh = await fetchDB();
-        users = fresh.users;
-        refresh();
+      const user = await loginCustomer(raw);
+      if (!user) {
+        setLoginError("Ce code ne nous dit rien… Vérifiez-le, ou créez votre carte juste en dessous.");
+        return;
       }
-      if (users.length) selectUser(users[0].id);
+      setLoginError("");
+      setLoginCode("");
+      setSession(user);
     } catch (err) {
       setLoginError("Impossible de joindre la base. Réessayez.");
     }
@@ -175,22 +185,16 @@ export default function App() {
     setSignupError("");
     setSignupBusy(true);
     try {
-      const existingCodes = new Set(db.users.map((u) => u.id));
-      const newUser = await createCustomer(
-        {
-          name,
-          nickname,
-          phone: signupPhone.trim(),
-          instagram: signupInsta.trim().replace(/^@/, ""),
-          promoOptIn: signupPromo,
-        },
-        existingCodes
-      );
-      // Création = connexion immédiate ; ajout optimiste + révélation du code
-      setDb((prev) => ({ ...prev, users: [...prev.users, newUser] }));
-      selectUser(newUser.id);
+      const newUser = await createCustomer({
+        name,
+        nickname,
+        phone: signupPhone.trim(),
+        instagram: signupInsta.trim().replace(/^@/, ""),
+        promoOptIn: signupPromo,
+      });
+      // Création = connexion immédiate ; puis révélation du code
+      setSession(newUser);
       setCreatedUser(newUser);
-      refresh();
     } catch (err) {
       setSignupError("La création a échoué. Vérifiez votre connexion et réessayez.");
     } finally {
@@ -278,26 +282,20 @@ export default function App() {
       instagram: profileInsta.trim().replace(/^@/, ""),
       promoOptIn: profilePromo,
     };
-    // Mise à jour optimiste, puis écriture Supabase
-    setDb((prev) => ({
-      ...prev,
-      users: prev.users.map((u) => (u.id === currentUserId ? { ...u, ...patch } : u)),
-    }));
     setProfileError("");
-    setProfileSaved(true);
     try {
-      await updateCustomer(currentUser.dbId, patch);
-      refresh();
+      const rec = await updateCustomer(currentUser.id, patch);
+      setCurrentUser(rec);
+      setProfileSaved(true);
     } catch (err) {
       setProfileError("Enregistrement échoué — réessayez.");
-      setProfileSaved(false);
       return;
     }
     setTimeout(() => setProfileOpen(false), 800);
   }
 
   function handleLogout() {
-    selectUser(null);
+    setSession(null);
     setLoginCode("");
     setLoginError("");
     setRewardBanner(null);
@@ -341,51 +339,29 @@ export default function App() {
     setPin((prev) => prev.slice(0, -1));
   }
 
-  // Enregistre une visite : ajout optimiste (choreographie du tampon) + écriture Supabase.
-  function applyStamp(type, serverCode) {
-    const user = db.users.find((u) => u.id === currentUserId);
-    if (!user) return;
-    const newCount = Math.min(monthVisits(user, cardSize) + 1, cardSize);
-    const tempId = `temp-${Date.now()}`;
-    const record = { id: tempId, date: new Date().toISOString(), type, serverCode };
-    setDb((prev) => ({
-      ...prev,
-      users: prev.users.map((u) =>
-        u.id === currentUserId ? { ...u, history: [...u.history, record] } : u
-      ),
-    }));
-    // Écriture réelle en arrière-plan ; le temps réel réconcilie ensuite.
-    addVisit(user.dbId, type, serverCode)
-      .then(() => refresh())
-      .catch(() => {
-        // Échec : on retire le tampon optimiste
-        setDb((prev) => ({
-          ...prev,
-          users: prev.users.map((u) =>
-            u.id === currentUserId
-              ? { ...u, history: u.history.filter((h) => h.id !== tempId) }
-              : u
-          ),
-        }));
-      });
+  // Choreographie tampon → célébration, à partir de l'enregistrement à jour.
+  function celebrate(record) {
+    const newCount = monthVisits(record, cardSize);
+    setGridOpen(true);
+    setJustStamped(newCount);
     setTimeout(() => {
-      setGridOpen(true);
-      setJustStamped(newCount);
-      setTimeout(() => {
-        const cell = document.getElementById(`cell-${newCount}`);
-        if (cell) cell.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 80);
-      // On laisse le tampon "claquer" sur la carte avant de célébrer la récompense
-      const reward = rewards.find((r) => r.visit === newCount);
-      if (reward) setTimeout(() => setRewardBanner(reward), 620);
-    }, 350);
+      const cell = document.getElementById(`cell-${newCount}`);
+      if (cell) cell.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    // On laisse le tampon "claquer" sur la carte avant de célébrer la récompense
+    const reward = rewards.find((r) => r.visit === newCount);
+    if (reward) setTimeout(() => setRewardBanner(reward), 620);
   }
 
-  function validatePin(enteredPin) {
-    if (SERVER_CODES.includes(enteredPin)) {
+  // Le code serveur est validé EN BASE (RPC). Succès → tampon ; échec → secousse.
+  async function submitStamp(enteredPin) {
+    if (!currentUser) return;
+    try {
+      const record = await addVisit(currentUser.id, enteredPin, proofType);
+      setCurrentUser(record);
       closeVisitDrawer();
-      applyStamp(proofType, enteredPin);
-    } else {
+      setTimeout(() => celebrate(record), 350);
+    } catch (err) {
       setPinError("Code invalide — réessayez");
       setPinShake(true);
       setTimeout(() => {
@@ -395,18 +371,9 @@ export default function App() {
     }
   }
 
-  // TEMP : simule un tampon validé sans passer par le serveur
-  function handleDemoStamp() {
-    if (!currentUser || visits >= cardSize) return;
-    setJustStamped(null);
-    setRewardBanner(null);
-    applyStamp(Math.random() < 0.5 ? "instagram" : "google", "1111");
-  }
-
   const journeyComplete = visits >= cardSize;
   const nextReward = rewards.find((r) => r.visit > visits);
   const rewardVisits = new Set(rewards.map((r) => r.visit));
-  const titles = db.titles;
 
   function renderCell(visitNumber) {
     const completed = visitNumber <= visits;
@@ -544,8 +511,8 @@ export default function App() {
   const btnGhost =
     "h-14 w-full rounded-full border-2 border-foreground/70 font-display text-lg font-extrabold tracking-wide text-foreground transition-all duration-150 hover:bg-foreground hover:text-accent-foreground active:scale-[0.97]";
 
-  if (db.loading) return <Splash text="Chargement…" />;
-  if (db.error)
+  if (config.loading || restoring) return <Splash text="Chargement…" />;
+  if (config.error)
     return <Splash text="Connexion à la base impossible" sub="Vérifiez votre réseau puis rechargez la page." />;
 
   return (
@@ -686,14 +653,6 @@ export default function App() {
 
             <button type="button" onClick={() => setSignupOpen(true)} className={btnGhost}>
               Créer ma carte
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDemoLogin}
-              className="mt-4 h-11 w-full rounded-full border-2 border-dashed border-muted-foreground/40 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground active:scale-[0.98]"
-            >
-              Temp — Connexion démo
             </button>
           </div>
 
@@ -889,15 +848,6 @@ export default function App() {
             ) : (
               <button type="button" onClick={openVisitDrawer} className={btnPrimary}>
                 Tamponner ma visite
-              </button>
-            )}
-            {!journeyComplete && (
-              <button
-                type="button"
-                onClick={handleDemoStamp}
-                className="mt-2 h-9 w-full rounded-full border-2 border-dashed border-muted-foreground/40 text-[9px] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition-colors duration-150 hover:border-foreground hover:text-foreground active:scale-[0.98]"
-              >
-                Temp — Simuler un tampon
               </button>
             )}
           </div>
