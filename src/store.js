@@ -28,6 +28,9 @@ export const BASE = ENV_BASE;
 export const BRAND = "Pickel'z";
 export const TAGLINE = "Burger and more !";
 export const INSTA_HANDLE = "@pickelz";
+// Lien direct vers la page « laisser un avis » Google de l'établissement.
+export const GOOGLE_REVIEW_URL =
+  "https://search.google.com/local/writereview?placeid=ChIJacHbo3uL_RIRbOVKH2gELX0";
 
 export const DEV_CREDIT = "Aboulkacem";
 export const DEV_LINKEDIN = "https://www.linkedin.com/in/aboulkacem-ben-arab-567974241/";
@@ -69,6 +72,16 @@ export function monthVisits(user, cardSize = DEFAULT_CARD_SIZE, ref = new Date()
   const start = cycleStart(dates[0], ref);
   const count = dates.filter((d) => d >= start && d <= ref).length;
   return Math.min(count, cardSize);
+}
+
+// Date de la prochaine remise à zéro de la carte : un mois après le début du
+// cycle courant. Renvoie null si le client n'a encore aucune visite (pas de cycle).
+export function nextReset(user, ref = new Date()) {
+  if (!user.history || user.history.length === 0) return null;
+  const dates = user.history.map((h) => new Date(h.date)).sort((a, b) => a - b);
+  const reset = cycleStart(dates[0], ref);
+  reset.setMonth(reset.getMonth() + 1);
+  return reset;
 }
 
 export function formatDateFR(iso) {

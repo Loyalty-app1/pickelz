@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, ArrowRight, ChevronDown } from "lucide-react";
+import { X, ArrowRight, ChevronDown, Star } from "lucide-react";
 import { useConfig } from "./useLiveDB.js";
 import Footer from "./Footer.jsx";
 import {
@@ -7,7 +7,9 @@ import {
   IMG_LOGO,
   TAGLINE,
   INSTA_HANDLE,
+  GOOGLE_REVIEW_URL,
   monthVisits,
+  nextReset,
   activeRewards,
   formatDateFR,
   loginCustomer,
@@ -99,7 +101,7 @@ export default function App() {
 
   // Validation de visite
   const [visitOpen, setVisitOpen] = useState(false);
-  const [visitStep, setVisitStep] = useState("proof"); // proof | server | pin
+  const [visitStep, setVisitStep] = useState("proof"); // proof | review | server | pin
   const [proofType, setProofType] = useState(null); // 'instagram' | 'google'
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
@@ -126,6 +128,7 @@ export default function App() {
     [config.rewards, cardSize]
   );
   const visits = currentUser ? monthVisits(currentUser, cardSize) : 0;
+  const resetDate = currentUser ? nextReset(currentUser) : null;
 
   const confettiPieces = useMemo(() => {
     if (!rewardBanner) return [];
@@ -303,7 +306,9 @@ export default function App() {
 
   function handleSelectProof(type) {
     setProofType(type);
-    setVisitStep("server");
+    // L'avis Google passe par un écran dédié avec le lien direct ;
+    // Instagram file directement vers le code équipe.
+    setVisitStep(type === "google" ? "review" : "server");
   }
 
   function handleKeypadPress(digit) {
@@ -691,8 +696,10 @@ export default function App() {
                     ? `Encore ${nextReward.visit - visits} visite${nextReward.visit - visits > 1 ? "s" : ""} avant : ${nextReward.label.toLowerCase()}.`
                     : "Continuez, ça sent bon."}
               </p>
-              <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-                Votre carte se remet à zéro chaque mois, à la date de votre première visite
+              <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                {resetDate
+                  ? `Votre carte se remet à zéro le ${formatDateFR(resetDate)}`
+                  : "Votre carte se remet à zéro un mois après votre première visite"}
               </p>
             </section>
 
@@ -1148,12 +1155,50 @@ export default function App() {
                     <div>
                       <p className="font-display text-xl font-bold">Avis Google</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        Vous avez laissé un avis avec une photo du lieu
+                        Laissez un avis avec une photo du lieu
                       </p>
                     </div>
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
                       <ArrowRight size={18} strokeWidth={2.75} />
                     </span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {visitStep === "review" && (
+              <div className="animate-fade-in">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                  Avis Google
+                </p>
+                <h2 className="mt-1 font-display text-3xl font-extrabold">Laissez votre avis.</h2>
+                <p className="mt-2 max-w-[330px] text-sm leading-relaxed text-muted-foreground">
+                  Ouvrez notre page Google, laissez un avis avec une photo du lieu, puis revenez ici
+                  pour valider votre visite.
+                </p>
+                <div className="mt-6 space-y-3">
+                  <a
+                    href={GOOGLE_REVIEW_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${btnPrimary} flex items-center justify-center gap-2`}
+                  >
+                    <Star size={20} strokeWidth={2.75} fill="currentColor" />
+                    Laisser mon avis Google
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setVisitStep("server")}
+                    className={btnGhost}
+                  >
+                    Continuer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisitStep("proof")}
+                    className="mx-auto block rounded-full px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors duration-150 hover:text-foreground active:scale-95"
+                  >
+                    Retour
                   </button>
                 </div>
               </div>
@@ -1179,7 +1224,7 @@ export default function App() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setVisitStep("proof")}
+                    onClick={() => setVisitStep(proofType === "google" ? "review" : "proof")}
                     className="mx-auto block rounded-full px-5 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors duration-150 hover:text-foreground active:scale-95"
                   >
                     Retour
