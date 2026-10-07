@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { X, Plus, Trash2 } from "lucide-react";
+import { X, Plus, Trash2, LoaderCircle } from "lucide-react";
 import { getLocalTimeZone, today, startOfMonth, endOfMonth } from "@internationalized/date";
 import DateRange from "./DateRange.jsx";
 import Footer from "./Footer.jsx";
@@ -78,6 +78,31 @@ const LABEL = "mb-2 block text-[10px] font-bold uppercase tracking-[0.15em] text
 const BTN =
   "h-12 rounded-full bg-accent px-6 font-display text-base font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97]";
 
+/* Indicateurs de chargement */
+function Spinner({ size = 18, className = "" }) {
+  return (
+    <LoaderCircle
+      size={size}
+      strokeWidth={2.5}
+      aria-hidden="true"
+      className={`shrink-0 motion-safe:animate-spin ${className}`}
+    />
+  );
+}
+
+// Remplace un tableau / une liste tant que les données ne sont pas arrivées.
+function LoadingBlock({ label = "Chargement…", className = "py-12" }) {
+  return (
+    <div
+      role="status"
+      className={`flex items-center justify-center gap-3 px-8 text-sm text-muted-foreground ${className}`}
+    >
+      <Spinner />
+      {label}
+    </div>
+  );
+}
+
 /* Bordure lumineuse au survol — même animation que les cases récompense */
 function GlowCard({ children, className = "" }) {
   return (
@@ -89,24 +114,28 @@ function GlowCard({ children, className = "" }) {
   );
 }
 
-function StatTile({ label, value, hint }) {
+function StatTile({ label, value, hint, loading = false }) {
   return (
     <GlowCard>
       <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-2 font-display text-4xl font-extrabold tabular-nums">{value}</p>
-      {hint && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{hint}</p>}
+      <p className="mt-2 font-display text-4xl font-extrabold tabular-nums">
+        {loading ? <Spinner size={28} className="inline-block text-muted-foreground" /> : value}
+      </p>
+      {hint && !loading && (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{hint}</p>
+      )}
     </GlowCard>
   );
 }
 
-function ChartCard({ title, subtitle, children }) {
+function ChartCard({ title, subtitle, loading = false, children }) {
   return (
     <GlowCard className="h-full">
       <p className="font-display text-lg font-bold">{title}</p>
       {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
-      <div className="mt-4">{children}</div>
+      <div className="mt-4">{loading ? <LoadingBlock className="h-44" /> : children}</div>
     </GlowCard>
   );
 }
@@ -379,7 +408,14 @@ function AdminGate({ children }) {
           className="mt-6 h-14 w-full rounded-2xl border-2 border-transparent bg-surface px-4 text-center font-display text-2xl tracking-[0.4em] text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/40 focus:border-foreground"
         />
         <button type="submit" disabled={busy} className={`${BTN} mt-4 w-full disabled:opacity-60`}>
-          {busy ? "…" : "Entrer"}
+          {busy ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner />
+              Vérification…
+            </span>
+          ) : (
+            "Entrer"
+          )}
         </button>
         <a
           href={BASE}
@@ -442,6 +478,7 @@ function AdminShell({ active, children }) {
 export function AdminDashboard() {
   // Snapshot complet (PII incluse) via RPC protégée par PIN, rafraîchi périodiquement.
   const [db, setDb] = useState({ users: [], rewards: [], cardSize: 50, servers: [] });
+  const [loading, setLoading] = useState(true); // tant que le 1er snapshot n'est pas arrivé
   const [range, setRange] = useState(null); // {start, end} CalendarDate ou null = tout
   const [proofFilter, setProofFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -459,6 +496,8 @@ export function AdminDashboard() {
       if (snap) setDb(snap);
     } catch (err) {
       /* PIN révoqué / réseau : on garde l'affichage courant */
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -662,7 +701,9 @@ export function AdminDashboard() {
                 le serveur saisit pour valider une visite.
               </p>
               <div className="mt-4 space-y-2">
-                {db.servers.length === 0 ? (
+                {loading ? (
+                  <LoadingBlock className="rounded-2xl bg-surface-deep py-6" />
+                ) : db.servers.length === 0 ? (
                   <p className="rounded-2xl bg-surface-deep px-4 py-6 text-center text-sm text-muted-foreground">
                     Aucun serveur pour l'instant.
                   </p>
@@ -709,7 +750,7 @@ export function AdminDashboard() {
                   disabled={serverBusy || newServerName.trim().length < 1}
                   className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-accent px-4 font-display text-sm font-extrabold text-accent-foreground transition-all duration-150 hover:brightness-105 active:scale-[0.97] disabled:opacity-40"
                 >
-                  <Plus size={16} strokeWidth={2.5} />
+                  {serverBusy ? <Spinner size={16} /> : <Plus size={16} strokeWidth={2.5} />}
                   Ajouter
                 </button>
               </form>
@@ -771,21 +812,25 @@ export function AdminDashboard() {
       {/* Indicateurs clés */}
       <section className="animate-fade-in-up mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
+          loading={loading}
           label="Clients"
           value={stats.totalUsers}
           hint={`${stats.participants} actif${stats.participants > 1 ? "s" : ""} ce mois · ${stats.promoOptIns} opt-in promos`}
         />
         <StatTile
+          loading={loading}
           label="Visites (période)"
           value={stats.filteredVisits}
           hint={`${stats.visitsThisMonth} ce mois-ci, tous types`}
         />
         <StatTile
+          loading={loading}
           label="Remises débloquées"
           value={stats.discountsGiven}
           hint="Sur le parcours du mois en cours"
         />
         <StatTile
+          loading={loading}
           label="Gourmandises offertes"
           value={stats.treatsGiven}
           hint="Sodas, crêpes et milkshakes débloqués"
@@ -795,27 +840,39 @@ export function AdminDashboard() {
       {/* Fidélité & rétention */}
       <section className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
+          loading={loading}
           label="Rétention mensuelle"
           value={stats.retentionRate === null ? "—" : `${stats.retentionRate}%`}
           hint="Clients du mois dernier revenus ce mois-ci"
         />
         <StatTile
+          loading={loading}
           label="Clients récurrents"
           value={stats.returningRate === null ? "—" : `${stats.returningRate}%`}
           hint={`${stats.returningCount} client${stats.returningCount > 1 ? "s" : ""} avec 2 visites ou plus`}
         />
         <StatTile
+          loading={loading}
           label="Retour moyen"
           value={stats.avgReturnDays === null ? "—" : `${stats.avgReturnDays} j`}
           hint="Délai moyen entre deux visites"
         />
-        <StatTile label="Actifs ce mois" value={stats.participants} hint="Clients avec au moins une visite ce mois-ci" />
+        <StatTile
+          loading={loading}
+          label="Actifs ce mois"
+          value={stats.participants}
+          hint="Clients avec au moins une visite ce mois-ci"
+        />
       </section>
 
       {/* Graphiques */}
       <section className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-12">
         <div className="lg:col-span-5">
-          <ChartCard title="Preuves de visite" subtitle="Répartition sur la période filtrée">
+          <ChartCard
+            title="Preuves de visite"
+            subtitle="Répartition sur la période filtrée"
+            loading={loading}
+          >
             <Donut
               total={stats.instagram + stats.google}
               centerLabel="PREUVES"
@@ -827,7 +884,11 @@ export function AdminDashboard() {
           </ChartCard>
         </div>
         <div className="lg:col-span-7">
-          <ChartCard title="Visites par mois" subtitle="6 derniers mois, filtre preuve appliqué">
+          <ChartCard
+            title="Visites par mois"
+            subtitle="6 derniers mois, filtre preuve appliqué"
+            loading={loading}
+          >
             <Bars data={stats.months} />
           </ChartCard>
         </div>
@@ -837,6 +898,7 @@ export function AdminDashboard() {
         <ChartCard
           title="Récompenses débloquées"
           subtitle="Nombre de clients ayant atteint chaque palier ce mois-ci"
+          loading={loading}
         >
           <HBars data={stats.rewardBars} />
         </ChartCard>
@@ -854,7 +916,11 @@ export function AdminDashboard() {
             className="h-11 w-80 rounded-full border-2 border-transparent bg-surface px-5 text-sm text-foreground outline-none transition-colors duration-150 placeholder:text-muted-foreground/60 focus:border-foreground"
           />
         </div>
-        {visibleUsers.length === 0 ? (
+        {loading ? (
+          <div className="rounded-3xl bg-surface">
+            <LoadingBlock />
+          </div>
+        ) : visibleUsers.length === 0 ? (
           <div className="rounded-3xl bg-surface px-8 py-12 text-center text-sm text-muted-foreground">
             {users.length === 0
               ? "Aucun client pour l'instant."
@@ -1129,19 +1195,19 @@ export function AdminRewardsPage() {
               type="button"
               aria-label="Diminuer"
               onClick={() => bumpCard(-CARD_STEP)}
-              disabled={db.cardSize <= CARD_STEP}
+              disabled={db.loading || db.cardSize <= CARD_STEP}
               className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-deep font-display text-2xl font-bold text-foreground transition-colors duration-150 hover:bg-raised active:scale-95 disabled:opacity-30"
             >
               −
             </button>
             <div className="flex h-12 w-20 items-center justify-center rounded-2xl bg-accent font-display text-2xl font-extrabold tabular-nums text-accent-foreground">
-              {db.cardSize}
+              {db.loading ? <Spinner size={22} /> : db.cardSize}
             </div>
             <button
               type="button"
               aria-label="Augmenter"
               onClick={() => bumpCard(CARD_STEP)}
-              disabled={db.cardSize >= MAX_CARD_SIZE}
+              disabled={db.loading || db.cardSize >= MAX_CARD_SIZE}
               className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-deep font-display text-2xl font-bold text-foreground transition-colors duration-150 hover:bg-raised active:scale-95 disabled:opacity-30"
             >
               +
@@ -1150,60 +1216,64 @@ export function AdminRewardsPage() {
         </div>
 
         <div className="mt-4 overflow-x-auto rounded-3xl bg-surface">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                <th className="px-5 py-4 font-bold">Palier</th>
-                <th className="px-5 py-4 font-bold">Récompense</th>
-                <th className="px-5 py-4 font-bold">Type</th>
-                <th className="px-5 py-4 font-bold">Plafond</th>
-                <th className="px-5 py-4 font-bold">Validité</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((r) => {
-                const outOfCard = r.visit > db.cardSize;
-                return (
-                <tr
-                  key={r.id}
-                  onClick={() => openEdit(r)}
-                  className={[
-                    "cursor-pointer border-b border-border/30 transition-colors duration-150 last:border-b-0 hover:bg-raised",
-                    outOfCard ? "opacity-45" : "",
-                  ].join(" ")}
-                >
-                  <td className="px-5 py-4">
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent font-display text-base font-extrabold tabular-nums text-accent-foreground">
-                      {r.visit}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4">
-                    <p className="font-display text-base font-bold">
-                      {r.label}
-                      {outOfCard && (
-                        <span className="ml-2 rounded-full bg-surface-deep px-2 py-0.5 align-middle text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                          Hors carte
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{r.detail}</p>
-                  </td>
-                  <td className="px-5 py-4 text-muted-foreground">
-                    {r.kind === "discount" ? "Remise" : "Gourmandise"}
-                  </td>
-                  <td className="px-5 py-4 text-muted-foreground">
-                    {r.kind === "discount" ? (r.capped ? "10 DT" : "Sans plafond") : "—"}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-muted-foreground">
-                    {r.activeFrom || r.activeTo
-                      ? `${r.activeFrom || "…"} → ${r.activeTo || "…"}`
-                      : "Permanente"}
-                  </td>
+          {db.loading ? (
+            <LoadingBlock />
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  <th className="px-5 py-4 font-bold">Palier</th>
+                  <th className="px-5 py-4 font-bold">Récompense</th>
+                  <th className="px-5 py-4 font-bold">Type</th>
+                  <th className="px-5 py-4 font-bold">Plafond</th>
+                  <th className="px-5 py-4 font-bold">Validité</th>
                 </tr>
-                );
-              })}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sorted.map((r) => {
+                  const outOfCard = r.visit > db.cardSize;
+                  return (
+                  <tr
+                    key={r.id}
+                    onClick={() => openEdit(r)}
+                    className={[
+                      "cursor-pointer border-b border-border/30 transition-colors duration-150 last:border-b-0 hover:bg-raised",
+                      outOfCard ? "opacity-45" : "",
+                    ].join(" ")}
+                  >
+                    <td className="px-5 py-4">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent font-display text-base font-extrabold tabular-nums text-accent-foreground">
+                        {r.visit}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="font-display text-base font-bold">
+                        {r.label}
+                        {outOfCard && (
+                          <span className="ml-2 rounded-full bg-surface-deep px-2 py-0.5 align-middle text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                            Hors carte
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{r.detail}</p>
+                    </td>
+                    <td className="px-5 py-4 text-muted-foreground">
+                      {r.kind === "discount" ? "Remise" : "Gourmandise"}
+                    </td>
+                    <td className="px-5 py-4 text-muted-foreground">
+                      {r.kind === "discount" ? (r.capped ? "10 DT" : "Sans plafond") : "—"}
+                    </td>
+                    <td className="px-5 py-4 text-xs text-muted-foreground">
+                      {r.activeFrom || r.activeTo
+                        ? `${r.activeFrom || "…"} → ${r.activeTo || "…"}`
+                        : "Permanente"}
+                    </td>
+                  </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 
@@ -1398,8 +1468,15 @@ export function AdminOrdersPage() {
               Les visites validées sur les dernières 24 heures, avec le serveur qui les a validées.
             </p>
           </div>
-          <span className="rounded-full bg-surface px-4 py-1.5 text-sm font-bold text-muted-foreground">
-            {visible.length} commande{visible.length > 1 ? "s" : ""}
+          <span className="flex items-center gap-2 rounded-full bg-surface px-4 py-1.5 text-sm font-bold text-muted-foreground">
+            {loading ? (
+              <>
+                <Spinner size={14} />
+                Chargement…
+              </>
+            ) : (
+              `${visible.length} commande${visible.length > 1 ? "s" : ""}`
+            )}
           </span>
         </div>
 
@@ -1429,7 +1506,7 @@ export function AdminOrdersPage() {
 
         <div className="mt-4 overflow-x-auto rounded-3xl bg-surface">
           {loading ? (
-            <div className="px-8 py-12 text-center text-sm text-muted-foreground">Chargement…</div>
+            <LoadingBlock />
           ) : visible.length === 0 ? (
             <div className="px-8 py-12 text-center text-sm text-muted-foreground">
               {orders.length === 0
@@ -1510,9 +1587,11 @@ export function AdminServerRewardsPage() {
   });
   const [proofFilter, setProofFilter] = useState("all");
   const [data, setData] = useState(null);
+  const [loadedKey, setLoadedKey] = useState(null); // période des données affichées
   const [failed, setFailed] = useState(false);
   const [hover, setHover] = useState(null);
   const lastReq = useRef(0);
+  const rangeKey = range ? `${range.start}/${range.end}` : "all";
 
   const refresh = useCallback(async () => {
     const req = ++lastReq.current; // ignore les réponses d'une période déjà quittée
@@ -1524,11 +1603,16 @@ export function AdminServerRewardsPage() {
       );
       if (req !== lastReq.current) return;
       setData(res || { servers: [], rows: [] });
+      setLoadedKey(rangeKey);
       setFailed(false);
     } catch (err) {
       if (req === lastReq.current) setFailed(true);
     }
-  }, [range]);
+  }, [range, rangeKey]);
+
+  // 1er chargement, puis changement de période (le rafraîchissement 15 s reste silencieux).
+  const initialLoading = data === null && !failed;
+  const updating = data !== null && loadedKey !== rangeKey && !failed;
 
   useEffect(() => {
     refresh();
@@ -1572,7 +1656,8 @@ export function AdminServerRewardsPage() {
               Le nombre de commandes validées par chaque serveur — de quoi récompenser les meilleurs.
             </p>
           </div>
-          <span className="rounded-full bg-surface px-4 py-1.5 text-sm font-bold text-muted-foreground">
+          <span className="flex items-center gap-2 rounded-full bg-surface px-4 py-1.5 text-sm font-bold text-muted-foreground">
+            {updating && <Spinner size={14} />}
             {period}
           </span>
         </div>
@@ -1585,6 +1670,7 @@ export function AdminServerRewardsPage() {
 
       <section className="animate-fade-in-up mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
+          loading={initialLoading || updating}
           label="Commandes"
           value={stats.total}
           hint={
@@ -1594,6 +1680,7 @@ export function AdminServerRewardsPage() {
           }
         />
         <StatTile
+          loading={initialLoading || updating}
           label="Serveurs actifs"
           value={stats.active}
           hint={
@@ -1603,6 +1690,7 @@ export function AdminServerRewardsPage() {
           }
         />
         <StatTile
+          loading={initialLoading || updating}
           label="Meilleur serveur"
           value={
             <span className="block truncate text-3xl" title={stats.top ? stats.top.name : undefined}>
@@ -1620,6 +1708,7 @@ export function AdminServerRewardsPage() {
           }
         />
         <StatTile
+          loading={initialLoading || updating}
           label="Moyenne"
           value={stats.avg === null ? "—" : stats.avg.toLocaleString("fr-FR")}
           hint="Commandes par serveur actif"
@@ -1641,9 +1730,15 @@ export function AdminServerRewardsPage() {
           )}
         </div>
 
-        <div className="overflow-x-auto rounded-3xl bg-surface">
-          {data === null && !failed ? (
-            <div className="px-8 py-12 text-center text-sm text-muted-foreground">Chargement…</div>
+        <div
+          aria-busy={initialLoading || updating}
+          className={[
+            "overflow-x-auto rounded-3xl bg-surface transition-opacity duration-150",
+            updating ? "opacity-50" : "",
+          ].join(" ")}
+        >
+          {initialLoading ? (
+            <LoadingBlock />
           ) : data === null ? (
             <div className="px-8 py-12 text-center text-sm text-muted-foreground">
               Impossible de charger le classement — réessayez dans un instant.
