@@ -35,6 +35,7 @@ function dateInput(slot) {
 export default function DateRange({ value, onChange }) {
   const now = today(getLocalTimeZone());
   const presets = [
+    { label: "Aujourd'hui", range: { start: now, end: now } },
     { label: "7 jours", range: { start: now.subtract({ days: 6 }), end: now } },
     { label: "30 jours", range: { start: now.subtract({ days: 29 }), end: now } },
     { label: "Ce mois", range: { start: startOfMonth(now), end: endOfMonth(now) } },

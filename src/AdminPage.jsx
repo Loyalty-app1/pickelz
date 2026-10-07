@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
-import { getLocalTimeZone } from "@internationalized/date";
+import { getLocalTimeZone, today, startOfMonth, endOfMonth } from "@internationalized/date";
 import DateRange from "./DateRange.jsx";
 import Footer from "./Footer.jsx";
 import { useConfig } from "./useLiveDB.js";
@@ -22,6 +22,8 @@ import {
   adminRemoveServer,
   adminSetPin,
   adminRecentOrders,
+  adminServerOrders,
+  serverLeaderboard,
   monthVisits,
   activeRewards,
   formatDateFR,
@@ -294,6 +296,35 @@ function HBars({ data }) {
   );
 }
 
+/* Filtre par type de preuve — commun aux onglets */
+const PROOF_OPTIONS = [
+  { v: "all", label: "Tout" },
+  { v: "instagram", label: "Instagram" },
+  { v: "google", label: "Google" },
+];
+
+function ProofToggle({ value, onChange }) {
+  return (
+    <div className="flex h-11 items-center rounded-full bg-surface p-1">
+      {PROOF_OPTIONS.map((o) => (
+        <button
+          key={o.v}
+          type="button"
+          onClick={() => onChange(o.v)}
+          className={[
+            "h-full rounded-full px-4 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-150",
+            value === o.v
+              ? "bg-accent text-accent-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          ].join(" ")}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /* ============================== ACCÈS ADMIN ============================== */
 
 function AdminGate({ children }) {
@@ -366,6 +397,7 @@ function AdminShell({ active, children }) {
     { key: "dash", label: "Tableau de bord", href: `${BASE}admin` },
     { key: "orders", label: "Commandes du jour", href: `${BASE}admin/commandes` },
     { key: "rewards", label: "Récompenses", href: `${BASE}admin/recompenses` },
+    { key: "staff", label: "Récompenses serveur", href: `${BASE}admin/recompenses-serveur` },
     { key: "app", label: "App cliente", href: BASE },
   ];
   return (
@@ -715,27 +747,7 @@ export function AdminDashboard() {
       {/* Filtres */}
       <section className="animate-fade-in-up mt-8 flex flex-wrap items-center gap-3">
         <DateRange value={range} onChange={setRange} />
-        <div className="flex h-11 items-center rounded-full bg-surface p-1">
-          {[
-            { v: "all", label: "Tout" },
-            { v: "instagram", label: "Instagram" },
-            { v: "google", label: "Google" },
-          ].map((o) => (
-            <button
-              key={o.v}
-              type="button"
-              onClick={() => setProofFilter(o.v)}
-              className={[
-                "h-full rounded-full px-4 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-150",
-                proofFilter === o.v
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        <ProofToggle value={proofFilter} onChange={setProofFilter} />
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
@@ -1393,27 +1405,7 @@ export function AdminOrdersPage() {
 
         {/* Filtres simples */}
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <div className="flex h-11 items-center rounded-full bg-surface p-1">
-            {[
-              { v: "all", label: "Tout" },
-              { v: "instagram", label: "Instagram" },
-              { v: "google", label: "Google" },
-            ].map((o) => (
-              <button
-                key={o.v}
-                type="button"
-                onClick={() => setProofFilter(o.v)}
-                className={[
-                  "h-full rounded-full px-4 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors duration-150",
-                  proofFilter === o.v
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                ].join(" ")}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
+          <ProofToggle value={proofFilter} onChange={setProofFilter} />
           <select
             value={serverFilter}
             onChange={(e) => setServerFilter(e.target.value)}
@@ -1479,6 +1471,262 @@ export function AdminOrdersPage() {
             </table>
           )}
         </div>
+      </section>
+    </AdminShell>
+  );
+}
+
+/* ============================== RÉCOMPENSES SERVEUR ============================== */
+
+const PROOF_LABEL = { instagram: "Story Instagram", google: "Avis Google" };
+const PROOF_COLOR = { instagram: CAT_INSTAGRAM, google: CAT_GOOGLE };
+
+/* Barre empilée Instagram | Google : carrée à la base, extrémité arrondie,
+   segments séparés par 2px de surface. Longueur relative au meilleur total. */
+function ServerBar({ server, proof, max, dim }) {
+  const parts = (proof === "all" ? ["instagram", "google"] : [proof]).filter((t) => server[t] > 0);
+  return (
+    <div
+      className="flex h-3.5 gap-0.5 transition-opacity duration-150"
+      style={{ width: `${(server.total / max) * 100}%`, opacity: dim ? 0.45 : 1 }}
+    >
+      {parts.map((t, i) => (
+        <div
+          key={t}
+          title={`${PROOF_LABEL[t]} · ${server[t]}`}
+          className={["h-full", i === parts.length - 1 ? "rounded-r-[4px]" : ""].join(" ")}
+          style={{ flex: `${server[t]} 1 0`, backgroundColor: PROOF_COLOR[t] }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function AdminServerRewardsPage() {
+  // Par défaut : le mois en cours (période naturelle pour récompenser l'équipe).
+  const [range, setRange] = useState(() => {
+    const now = today(getLocalTimeZone());
+    return { start: startOfMonth(now), end: endOfMonth(now) };
+  });
+  const [proofFilter, setProofFilter] = useState("all");
+  const [data, setData] = useState(null);
+  const [failed, setFailed] = useState(false);
+  const [hover, setHover] = useState(null);
+  const lastReq = useRef(0);
+
+  const refresh = useCallback(async () => {
+    const req = ++lastReq.current; // ignore les réponses d'une période déjà quittée
+    try {
+      const res = await adminServerOrders(
+        adminPin(),
+        range ? range.start.toString() : null,
+        range ? range.end.toString() : null
+      );
+      if (req !== lastReq.current) return;
+      setData(res || { servers: [], rows: [] });
+      setFailed(false);
+    } catch (err) {
+      if (req === lastReq.current) setFailed(true);
+    }
+  }, [range]);
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 15000); // pas de temps réel sur les tables PII
+    return () => clearInterval(t);
+  }, [refresh]);
+
+  const board = useMemo(() => serverLeaderboard(data || undefined, proofFilter), [data, proofFilter]);
+
+  const stats = useMemo(() => {
+    const list = board.list;
+    const active = list.filter((s) => s.total > 0);
+    const total = list.reduce((n, s) => n + s.total, 0);
+    const top = active[0] || null;
+    return {
+      total,
+      instagram: list.reduce((n, s) => n + s.instagram, 0),
+      google: list.reduce((n, s) => n + s.google, 0),
+      active: active.length,
+      idle: list.filter((s) => !s.former && s.total === 0).length,
+      top,
+      topTies: top ? active.filter((s) => s.rank === 1).length - 1 : 0,
+      avg: active.length > 0 ? Math.round((total / active.length) * 10) / 10 : null,
+      max: Math.max(...list.map((s) => s.total), 1),
+    };
+  }, [board]);
+
+  const tz = getLocalTimeZone();
+  const period = range
+    ? `${formatDateFR(range.start.toDate(tz))} → ${formatDateFR(range.end.toDate(tz))}`
+    : "Depuis le début";
+  const showSplit = proofFilter === "all";
+
+  return (
+    <AdminShell active="staff">
+      <section className="animate-fade-in-up mt-8">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-display text-3xl font-extrabold">Récompenses serveur</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Le nombre de commandes validées par chaque serveur — de quoi récompenser les meilleurs.
+            </p>
+          </div>
+          <span className="rounded-full bg-surface px-4 py-1.5 text-sm font-bold text-muted-foreground">
+            {period}
+          </span>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <DateRange value={range} onChange={setRange} />
+          <ProofToggle value={proofFilter} onChange={setProofFilter} />
+        </div>
+      </section>
+
+      <section className="animate-fade-in-up mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          label="Commandes"
+          value={stats.total}
+          hint={
+            showSplit
+              ? `${stats.instagram} stor${stats.instagram > 1 ? "ies" : "y"} · ${stats.google} avis Google`
+              : `${PROOF_LABEL[proofFilter]} uniquement`
+          }
+        />
+        <StatTile
+          label="Serveurs actifs"
+          value={stats.active}
+          hint={
+            stats.idle > 0
+              ? `${stats.idle} serveur${stats.idle > 1 ? "s" : ""} de l'équipe sans commande`
+              : "Avec au moins une commande sur la période"
+          }
+        />
+        <StatTile
+          label="Meilleur serveur"
+          value={
+            <span className="block truncate text-3xl" title={stats.top ? stats.top.name : undefined}>
+              {stats.top ? stats.top.name : "—"}
+            </span>
+          }
+          hint={
+            stats.top
+              ? `${stats.top.total} commande${stats.top.total > 1 ? "s" : ""}${
+                  stats.topTies > 0
+                    ? ` · ex æquo avec ${stats.topTies} autre${stats.topTies > 1 ? "s" : ""}`
+                    : ""
+                }`
+              : "Aucune commande sur la période"
+          }
+        />
+        <StatTile
+          label="Moyenne"
+          value={stats.avg === null ? "—" : stats.avg.toLocaleString("fr-FR")}
+          hint="Commandes par serveur actif"
+        />
+      </section>
+
+      <section className="mt-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-display text-2xl font-extrabold">Classement</h3>
+          {showSplit && board.list.length > 0 && (
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              {["instagram", "google"].map((t) => (
+                <span key={t} className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-[3px]" style={{ backgroundColor: PROOF_COLOR[t] }} />
+                  {PROOF_LABEL[t]}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-x-auto rounded-3xl bg-surface">
+          {data === null && !failed ? (
+            <div className="px-8 py-12 text-center text-sm text-muted-foreground">Chargement…</div>
+          ) : data === null ? (
+            <div className="px-8 py-12 text-center text-sm text-muted-foreground">
+              Impossible de charger le classement — réessayez dans un instant.
+            </div>
+          ) : board.list.length === 0 ? (
+            <div className="px-8 py-12 text-center text-sm text-muted-foreground">
+              Aucun serveur pour l'instant — ajoutez l'équipe depuis le tableau de bord.
+            </div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-border/50 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                  <th className="px-5 py-4 font-bold">Rang</th>
+                  <th className="px-5 py-4 font-bold">Serveur</th>
+                  <th className="w-full min-w-40 px-5 py-4 font-bold">
+                    <span className="sr-only">Répartition</span>
+                  </th>
+                  {showSplit && <th className="px-5 py-4 text-right font-bold">Instagram</th>}
+                  {showSplit && <th className="px-5 py-4 text-right font-bold">Google</th>}
+                  <th className="px-5 py-4 text-right font-bold">Commandes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {board.list.map((s, i) => (
+                  <tr
+                    key={s.name}
+                    onMouseEnter={() => setHover(i)}
+                    onMouseLeave={() => setHover(null)}
+                    className="border-b border-border/30 transition-colors duration-150 last:border-b-0 hover:bg-raised"
+                  >
+                    <td className="px-5 py-3.5">
+                      <span
+                        className={[
+                          "inline-flex h-9 w-9 items-center justify-center rounded-xl font-display text-base font-extrabold tabular-nums",
+                          s.total > 0 && s.rank <= 3
+                            ? "bg-accent text-accent-foreground"
+                            : "bg-surface-deep text-muted-foreground",
+                        ].join(" ")}
+                      >
+                        {s.total > 0 ? s.rank : "—"}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3.5 font-display text-base font-bold">
+                      {s.name}
+                      {s.former && (
+                        <span className="ml-2 rounded-full bg-surface-deep px-2 py-0.5 align-middle font-sans text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                          Retiré
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <ServerBar
+                        server={s}
+                        proof={proofFilter}
+                        max={stats.max}
+                        dim={hover !== null && hover !== i}
+                      />
+                    </td>
+                    {showSplit && (
+                      <td className="px-5 py-3.5 text-right tabular-nums text-muted-foreground">
+                        {s.instagram}
+                      </td>
+                    )}
+                    {showSplit && (
+                      <td className="px-5 py-3.5 text-right tabular-nums text-muted-foreground">
+                        {s.google}
+                      </td>
+                    )}
+                    <td className="px-5 py-3.5 text-right font-display text-lg font-extrabold tabular-nums">
+                      {s.total}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {board.unassigned > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            + {board.unassigned} commande{board.unassigned > 1 ? "s" : ""} sans serveur sur la
+            période (validée{board.unassigned > 1 ? "s" : ""} avant le suivi par serveur).
+          </p>
+        )}
       </section>
     </AdminShell>
   );

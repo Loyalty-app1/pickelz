@@ -84,6 +84,32 @@ export function nextReset(user, ref = new Date()) {
   return reset;
 }
 
+// Classement des serveurs à partir de admin_server_orders ({servers, rows}),
+// filtre preuve appliqué ("all" | "instagram" | "google"). L'équipe actuelle
+// apparaît même à zéro ; un nom absent de l'équipe = serveur retiré (former).
+// Les visites sans serveur (avant le suivi) sont comptées à part (unassigned).
+// Rang « olympique » : les ex æquo partagent le rang (1, 1, 3).
+export function serverLeaderboard({ servers = [], rows = [] } = {}, proof = "all") {
+  const team = new Set(servers);
+  const by = new Map(servers.map((name) => [name, { name, instagram: 0, google: 0 }]));
+  const unassigned = { instagram: 0, google: 0 };
+  for (const r of rows) {
+    if (r.type !== "instagram" && r.type !== "google") continue;
+    if (!r.server) {
+      unassigned[r.type] += r.n;
+      continue;
+    }
+    if (!by.has(r.server)) by.set(r.server, { name: r.server, instagram: 0, google: 0 });
+    by.get(r.server)[r.type] += r.n;
+  }
+  const pick = (s) => (proof === "all" ? s.instagram + s.google : s[proof]);
+  const list = [...by.values()]
+    .map((s) => ({ ...s, total: pick(s), former: !team.has(s.name) }))
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, "fr"));
+  for (const s of list) s.rank = 1 + list.filter((o) => o.total > s.total).length;
+  return { list, unassigned: pick(unassigned) };
+}
+
 export function formatDateFR(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -193,6 +219,14 @@ export async function adminDeleteReward(pin, id) {
 // Commandes validées sur les dernières 24 h (nom serveur figé à la validation).
 export async function adminRecentOrders(pin) {
   return unwrap(await supabase.rpc("admin_recent_orders", { p_pin: pin })) || [];
+}
+
+// Commandes par serveur et par preuve sur une période (dates "AAAA-MM-JJ"
+// incluses, heure de Tunis ; null = sans borne). Renvoie {servers, rows}.
+export async function adminServerOrders(pin, from, to) {
+  return unwrap(
+    await supabase.rpc("admin_server_orders", { p_pin: pin, p_from: from || null, p_to: to || null })
+  );
 }
 
 export async function adminSetCardSize(pin, n) {

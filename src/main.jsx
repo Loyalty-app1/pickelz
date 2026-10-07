@@ -2,7 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App.jsx";
-import { AdminDashboard, AdminRewardsPage, AdminOrdersPage } from "./AdminPage.jsx";
+import {
+  AdminDashboard,
+  AdminRewardsPage,
+  AdminOrdersPage,
+  AdminServerRewardsPage,
+} from "./AdminPage.jsx";
 
 // Routage par chemin (sans hash). Les liens font une vraie navigation ;
 // sur GitHub Pages, 404.html (copie d'index.html) sert de fallback SPA.
@@ -15,6 +20,7 @@ function Router() {
   if (path === "admin") return <AdminDashboard />;
   if (path === "admin/recompenses") return <AdminRewardsPage />;
   if (path === "admin/commandes") return <AdminOrdersPage />;
+  if (path === "admin/recompenses-serveur") return <AdminServerRewardsPage />;
   return <App />;
 }
 
