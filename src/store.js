@@ -217,9 +217,8 @@ export async function adminDeleteReward(pin, id) {
 }
 
 // Commandes validées sur les dernières 24 h (nom serveur figé à la validation).
-// null = code admin refusé.
 export async function adminRecentOrders(pin) {
-  return unwrap(await supabase.rpc("admin_recent_orders", { p_pin: pin }));
+  return unwrap(await supabase.rpc("admin_recent_orders", { p_pin: pin })) || [];
 }
 
 // Commandes par serveur et par preuve sur une période (dates "AAAA-MM-JJ"
