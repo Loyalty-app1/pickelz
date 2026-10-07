@@ -33,6 +33,73 @@ import {
 const ADMIN_PIN_KEY = "tfc_admin_pin";
 const adminPin = () => sessionStorage.getItem(ADMIN_PIN_KEY) || "";
 
+// Code admin refusé (changé ailleurs, révoqué…) : retour à l'écran de connexion.
+function signOut() {
+  sessionStorage.removeItem(ADMIN_PIN_KEY);
+  window.location.reload();
+}
+
+// Snapshot déjà chargé par l'écran de connexion : le tableau de bord le
+// réutilise au lieu de refaire attendre l'admin juste après la saisie du code.
+let primedSnapshot = null;
+
+const POLL_MS = 15000; // pas de temps réel sur les tables PII
+
+/* Chargement d'une RPC admin : `loading` tant qu'aucune donnée réelle n'est
+   arrivée (un échec n'affiche jamais de zéros), nouvelles tentatives
+   rapprochées (1 s, 2 s, 4 s… puis 15 s), puis rafraîchissement silencieux.
+   `key` identifie la requête : quand elle change (ex. période), les anciennes
+   données restent affichées avec `updating` jusqu'à l'arrivée des nouvelles.
+   Une réponse `null` = code admin refusé. */
+function useAdminRpc(fetcher, key, initial = null) {
+  const [state, setState] = useState({ data: initial, key, failures: 0 });
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+  const runRef = useRef(null);
+  const lastReq = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    let timer;
+    let failures = 0;
+    const run = async () => {
+      clearTimeout(timer);
+      const req = ++lastReq.current;
+      let delay = POLL_MS;
+      try {
+        const res = await fetcherRef.current();
+        if (!alive || req !== lastReq.current) return;
+        if (res === null) return signOut();
+        failures = 0;
+        setState({ data: res, key, failures: 0 });
+      } catch (err) {
+        if (!alive || req !== lastReq.current) return;
+        failures += 1;
+        delay = Math.min(1000 * 2 ** (failures - 1), POLL_MS);
+        console.warn(`[admin] chargement impossible (essai ${failures}), nouvel essai dans ${delay / 1000} s :`, err);
+        setState((s) => ({ ...s, failures }));
+      }
+      timer = setTimeout(run, delay);
+    };
+    runRef.current = run;
+    run();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [key]);
+
+  return {
+    data: state.data,
+    loading: state.data === null,
+    updating: state.data !== null && state.key !== key,
+    retrying: state.failures > 0,
+    refresh: useCallback(() => runRef.current && runRef.current(), []),
+  };
+}
+
+const SLOW_LABEL = "Connexion lente — nouvel essai…";
+
 // Paire catégorielle validée sur la surface mauve profonde #53293A :
 // bande de luminance OKLab, plancher de chroma, séparation CVD (ΔE 80) et contraste ≥ 3:1.
 const CAT_INSTAGRAM = "#C87A2F";
@@ -91,14 +158,14 @@ function Spinner({ size = 18, className = "" }) {
 }
 
 // Remplace un tableau / une liste tant que les données ne sont pas arrivées.
-function LoadingBlock({ label = "Chargement…", className = "py-12" }) {
+function LoadingBlock({ slow = false, className = "py-12" }) {
   return (
     <div
       role="status"
-      className={`flex items-center justify-center gap-3 px-8 text-sm text-muted-foreground ${className}`}
+      className={`flex items-center justify-center gap-3 px-8 text-center text-sm text-muted-foreground ${className}`}
     >
       <Spinner />
-      {label}
+      {slow ? SLOW_LABEL : "Chargement…"}
     </div>
   );
 }
@@ -370,6 +437,7 @@ function AdminGate({ children }) {
       const snap = await adminSnapshot(pass);
       if (snap) {
         sessionStorage.setItem(ADMIN_PIN_KEY, pass);
+        primedSnapshot = snap;
         setUnlocked(true);
         return;
       }
@@ -475,10 +543,17 @@ function AdminShell({ active, children }) {
 
 /* ============================== TABLEAU DE BORD ============================== */
 
+const EMPTY_SNAPSHOT = { users: [], rewards: [], cardSize: 50, servers: [] };
+
 export function AdminDashboard() {
   // Snapshot complet (PII incluse) via RPC protégée par PIN, rafraîchi périodiquement.
-  const [db, setDb] = useState({ users: [], rewards: [], cardSize: 50, servers: [] });
-  const [loading, setLoading] = useState(true); // tant que le 1er snapshot n'est pas arrivé
+  const {
+    data,
+    loading,
+    retrying,
+    refresh,
+  } = useAdminRpc(() => adminSnapshot(adminPin()), "snapshot", primedSnapshot);
+  const db = data || EMPTY_SNAPSHOT;
   const [range, setRange] = useState(null); // {start, end} CalendarDate ou null = tout
   const [proofFilter, setProofFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -489,23 +564,6 @@ export function AdminDashboard() {
   const [serverBusy, setServerBusy] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [pinMsg, setPinMsg] = useState("");
-
-  const refresh = useCallback(async () => {
-    try {
-      const snap = await adminSnapshot(adminPin());
-      if (snap) setDb(snap);
-    } catch (err) {
-      /* PIN révoqué / réseau : on garde l'affichage courant */
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 15000); // pas de temps réel sur les tables PII
-    return () => clearInterval(t);
-  }, [refresh]);
 
   const users = db.users;
   const cardSize = db.cardSize;
@@ -702,7 +760,7 @@ export function AdminDashboard() {
               </p>
               <div className="mt-4 space-y-2">
                 {loading ? (
-                  <LoadingBlock className="rounded-2xl bg-surface-deep py-6" />
+                  <LoadingBlock slow={retrying} className="rounded-2xl bg-surface-deep py-6" />
                 ) : db.servers.length === 0 ? (
                   <p className="rounded-2xl bg-surface-deep px-4 py-6 text-center text-sm text-muted-foreground">
                     Aucun serveur pour l'instant.
@@ -918,7 +976,7 @@ export function AdminDashboard() {
         </div>
         {loading ? (
           <div className="rounded-3xl bg-surface">
-            <LoadingBlock />
+            <LoadingBlock slow={retrying} />
           </div>
         ) : visibleUsers.length === 0 ? (
           <div className="rounded-3xl bg-surface px-8 py-12 text-center text-sm text-muted-foreground">
@@ -1407,28 +1465,11 @@ export function AdminRewardsPage() {
 /* ============================== COMMANDES DU JOUR ============================== */
 
 export function AdminOrdersPage() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, retrying } = useAdminRpc(() => adminRecentOrders(adminPin()), "orders");
+  const orders = useMemo(() => (Array.isArray(data) ? data : []), [data]);
   const [proofFilter, setProofFilter] = useState("all");
   const [serverFilter, setServerFilter] = useState("all");
   const [search, setSearch] = useState("");
-
-  const refresh = useCallback(async () => {
-    try {
-      const rows = await adminRecentOrders(adminPin());
-      setOrders(Array.isArray(rows) ? rows : []);
-    } catch (err) {
-      /* on garde l'affichage courant */
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 15000); // pas de temps réel sur les tables PII
-    return () => clearInterval(t);
-  }, [refresh]);
 
   const serverNames = useMemo(
     () => [...new Set(orders.map((o) => o.serverName).filter(Boolean))].sort(),
@@ -1506,7 +1547,7 @@ export function AdminOrdersPage() {
 
         <div className="mt-4 overflow-x-auto rounded-3xl bg-surface">
           {loading ? (
-            <LoadingBlock />
+            <LoadingBlock slow={retrying} />
           ) : visible.length === 0 ? (
             <div className="px-8 py-12 text-center text-sm text-muted-foreground">
               {orders.length === 0
@@ -1586,39 +1627,18 @@ export function AdminServerRewardsPage() {
     return { start: startOfMonth(now), end: endOfMonth(now) };
   });
   const [proofFilter, setProofFilter] = useState("all");
-  const [data, setData] = useState(null);
-  const [loadedKey, setLoadedKey] = useState(null); // période des données affichées
-  const [failed, setFailed] = useState(false);
   const [hover, setHover] = useState(null);
-  const lastReq = useRef(0);
-  const rangeKey = range ? `${range.start}/${range.end}` : "all";
 
-  const refresh = useCallback(async () => {
-    const req = ++lastReq.current; // ignore les réponses d'une période déjà quittée
-    try {
-      const res = await adminServerOrders(
+  // Rechargé à chaque changement de période ; le rafraîchissement 15 s reste silencieux.
+  const { data, loading, updating, retrying } = useAdminRpc(
+    () =>
+      adminServerOrders(
         adminPin(),
         range ? range.start.toString() : null,
         range ? range.end.toString() : null
-      );
-      if (req !== lastReq.current) return;
-      setData(res || { servers: [], rows: [] });
-      setLoadedKey(rangeKey);
-      setFailed(false);
-    } catch (err) {
-      if (req === lastReq.current) setFailed(true);
-    }
-  }, [range, rangeKey]);
-
-  // 1er chargement, puis changement de période (le rafraîchissement 15 s reste silencieux).
-  const initialLoading = data === null && !failed;
-  const updating = data !== null && loadedKey !== rangeKey && !failed;
-
-  useEffect(() => {
-    refresh();
-    const t = setInterval(refresh, 15000); // pas de temps réel sur les tables PII
-    return () => clearInterval(t);
-  }, [refresh]);
+      ),
+    range ? `${range.start}/${range.end}` : "all"
+  );
 
   const board = useMemo(() => serverLeaderboard(data || undefined, proofFilter), [data, proofFilter]);
 
@@ -1670,7 +1690,7 @@ export function AdminServerRewardsPage() {
 
       <section className="animate-fade-in-up mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          loading={initialLoading || updating}
+          loading={loading || updating}
           label="Commandes"
           value={stats.total}
           hint={
@@ -1680,7 +1700,7 @@ export function AdminServerRewardsPage() {
           }
         />
         <StatTile
-          loading={initialLoading || updating}
+          loading={loading || updating}
           label="Serveurs actifs"
           value={stats.active}
           hint={
@@ -1690,7 +1710,7 @@ export function AdminServerRewardsPage() {
           }
         />
         <StatTile
-          loading={initialLoading || updating}
+          loading={loading || updating}
           label="Meilleur serveur"
           value={
             <span className="block truncate text-3xl" title={stats.top ? stats.top.name : undefined}>
@@ -1708,7 +1728,7 @@ export function AdminServerRewardsPage() {
           }
         />
         <StatTile
-          loading={initialLoading || updating}
+          loading={loading || updating}
           label="Moyenne"
           value={stats.avg === null ? "—" : stats.avg.toLocaleString("fr-FR")}
           hint="Commandes par serveur actif"
@@ -1731,18 +1751,14 @@ export function AdminServerRewardsPage() {
         </div>
 
         <div
-          aria-busy={initialLoading || updating}
+          aria-busy={loading || updating}
           className={[
             "overflow-x-auto rounded-3xl bg-surface transition-opacity duration-150",
             updating ? "opacity-50" : "",
           ].join(" ")}
         >
-          {initialLoading ? (
-            <LoadingBlock />
-          ) : data === null ? (
-            <div className="px-8 py-12 text-center text-sm text-muted-foreground">
-              Impossible de charger le classement — réessayez dans un instant.
-            </div>
+          {loading ? (
+            <LoadingBlock slow={retrying} />
           ) : board.list.length === 0 ? (
             <div className="px-8 py-12 text-center text-sm text-muted-foreground">
               Aucun serveur pour l'instant — ajoutez l'équipe depuis le tableau de bord.
